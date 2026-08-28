@@ -1,0 +1,1622 @@
+# Default Process Workflows
+#
+# These workflows are loaded into the database on first startup.
+# They can be edited, duplicated, or disabled through the UI.
+# Default workflows cannot be deleted.
+
+workflows:
+  # Naming Convention Validation
+  - id: "naming-convention-check"
+    name: "Naming Convention Validation"
+    description: "Validates that catalog objects follow naming conventions (lowercase with underscores). Applies auto-fix for required tags when possible."
+    trigger:
+      type: "on_create"
+      entity_types:
+        - "catalog"
+        - "schema"
+        - "table"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "validate-name"
+        name: "Validate Naming Convention"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT obj.name MATCHES '^[a-z][a-z0-9_]*$'
+            ON_FAIL FAIL 'Name must be lowercase with underscores only (e.g., my_table_name)'
+        on_pass: "check-owner-tag"
+        on_fail: "notify-naming-failure"
+
+      - id: "check-owner-tag"
+        name: "Check Owner Tag"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT HAS_TAG('owner')
+            ON_FAIL FAIL 'Owner tag is required'
+        on_pass: "success"
+        on_fail: "auto-fix-owner-tag"
+
+      - id: "auto-fix-owner-tag"
+        name: "Auto-assign Owner Tag"
+        type: "assign_tag"
+        config:
+          key: "owner"
+          value_source: "current_user"
+        on_pass: "success"
+        on_fail: "notify-tag-failure"
+
+      - id: "notify-naming-failure"
+        name: "Notify Naming Failure"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "validation_failed"
+          custom_message: "The object name does not follow naming conventions. Names must be lowercase with underscores only."
+        on_pass: "fail-naming"
+
+      - id: "notify-tag-failure"
+        name: "Notify Tag Failure"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "validation_failed"
+          custom_message: "Could not auto-assign owner tag. Please add the owner tag manually."
+        on_pass: "fail-tagging"
+
+      - id: "success"
+        name: "Validation Passed"
+        type: "pass"
+
+      - id: "fail-naming"
+        name: "Naming Convention Failed"
+        type: "fail"
+        config:
+          message: "Object name does not follow naming conventions"
+
+      - id: "fail-tagging"
+        name: "Tagging Failed"
+        type: "fail"
+        config:
+          message: "Required tags could not be applied"
+
+  # Data Product Publish Approval
+  - id: "data-product-approval"
+    name: "Data Product Publish Approval"
+    description: "Requires domain owner approval before publishing data products from approved to active status."
+    trigger:
+      type: "on_status_change"
+      entity_types:
+        - "data_product"
+      from_status: "approved"
+      to_status: "active"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "check-contract"
+        name: "Check Data Contract"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT obj.contract_id != '' OR obj.contracts != []
+            ON_FAIL FAIL 'Data product must have at least one data contract'
+        on_pass: "request-approval"
+        on_fail: "notify-no-contract"
+
+      - id: "request-approval"
+        name: "Request Domain Owner Approval"
+        type: "approval"
+        config:
+          approvers: "domain_owners"
+          timeout_days: 7
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-no-contract"
+        name: "Notify Missing Contract"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "validation_failed"
+          custom_message: "Cannot publish data product without a data contract. Please attach at least one contract first."
+        on_pass: "fail-no-contract"
+
+      - id: "notify-approved"
+        name: "Notify Approval"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "product_approved"
+          custom_message: "Your data product has been approved and is now active."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Rejection"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "product_rejected"
+          custom_message: "Your data product publish request has been rejected. Please review the feedback and resubmit."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Publish Approved"
+        type: "pass"
+
+      - id: "fail-no-contract"
+        name: "No Contract"
+        type: "fail"
+        config:
+          message: "Data product requires a data contract"
+
+      - id: "fail-rejected"
+        name: "Publish Rejected"
+        type: "fail"
+        config:
+          message: "Data product publish request was rejected"
+
+  # Data Contract Validation
+  - id: "data-contract-validation"
+    name: "Data Contract Schema Validation"
+    description: "Validates that data contracts have required schema fields and quality rules defined."
+    trigger:
+      type: "on_create"
+      entity_types:
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "check-schema"
+        name: "Check Schema Definition"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT obj.schema != '' AND obj.schema != '{}' AND obj.schema != '[]'
+            ON_FAIL FAIL 'Data contract must have a schema defined'
+        on_pass: "check-owner"
+        on_fail: "notify-no-schema"
+
+      - id: "check-owner"
+        name: "Check Owner"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT obj.owner != '' OR HAS_TAG('owner')
+            ON_FAIL FAIL 'Data contract must have an owner'
+        on_pass: "success"
+        on_fail: "auto-fix-owner"
+
+      - id: "auto-fix-owner"
+        name: "Auto-assign Owner"
+        type: "assign_tag"
+        config:
+          key: "owner"
+          value_source: "current_user"
+        on_pass: "success"
+
+      - id: "notify-no-schema"
+        name: "Notify Missing Schema"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "validation_failed"
+          custom_message: "Data contract must have a schema definition. Please add the schema before proceeding."
+        on_pass: "fail-no-schema"
+
+      - id: "success"
+        name: "Validation Passed"
+        type: "pass"
+
+      - id: "fail-no-schema"
+        name: "No Schema"
+        type: "fail"
+        config:
+          message: "Data contract requires a schema definition"
+
+  # PII Detection and Tagging
+  - id: "pii-detection"
+    name: "PII Detection and Classification"
+    description: "Detects potential PII columns and applies appropriate tags for data governance."
+    trigger:
+      type: "on_create"
+      entity_types:
+        - "table"
+    scope:
+      type: "all"
+    is_active: false  # Disabled by default - enable when needed
+    is_default: true
+    steps:
+      - id: "check-pii-columns"
+        name: "Check for PII Columns"
+        type: "conditional"
+        config:
+          condition: |
+            obj.name CONTAINS 'email' OR obj.name CONTAINS 'phone' OR 
+            obj.name CONTAINS 'ssn' OR obj.name CONTAINS 'address' OR
+            obj.name CONTAINS 'dob' OR obj.name CONTAINS 'birth'
+        on_pass: "tag-pii"
+        on_fail: "success-no-pii"
+
+      - id: "tag-pii"
+        name: "Apply PII Tag"
+        type: "assign_tag"
+        config:
+          key: "contains_pii"
+          value: "true"
+        on_pass: "notify-pii-detected"
+
+      - id: "notify-pii-detected"
+        name: "Notify PII Detection"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "pii_detected"
+          custom_message: "Potential PII detected in table. The table has been tagged for review."
+        on_pass: "success-pii"
+
+      - id: "success-no-pii"
+        name: "No PII Detected"
+        type: "pass"
+
+      - id: "success-pii"
+        name: "PII Tagged"
+        type: "pass"
+
+  # Pre-Creation Compliance Check (Inline Validation)
+  - id: "pre-creation-compliance"
+    name: "Pre-Creation Compliance Validation"
+    description: "Runs compliance policy checks BEFORE creating assets. Blocks creation if policies fail. Uses policy_check steps to reference existing compliance policies by ID."
+    trigger:
+      type: "before_create"
+      entity_types:
+        - "catalog"
+        - "schema"
+        - "table"
+    scope:
+      type: "all"
+    is_active: false  # Disabled by default - enable after configuring policies
+    is_default: true
+    steps:
+      - id: "naming-policy-check"
+        name: "Check Naming Convention Policy"
+        type: "policy_check"
+        config:
+          # This policy_id should be replaced with an actual UUID from your compliance policies
+          # The UI allows selecting policies from a dropdown
+          policy_id: "naming-conventions"
+          policy_name: "Naming Conventions"
+        on_pass: "tagging-policy-check"
+        on_fail: "fail-naming"
+
+      - id: "tagging-policy-check"
+        name: "Check Required Tags Policy"
+        type: "policy_check"
+        config:
+          policy_id: "required-tags"
+          policy_name: "Required Tags"
+        on_pass: "success"
+        on_fail: "fail-tagging"
+
+      - id: "success"
+        name: "All Policies Passed"
+        type: "pass"
+
+      - id: "fail-naming"
+        name: "Naming Policy Failed"
+        type: "fail"
+        config:
+          message: "Asset name does not comply with naming convention policy"
+
+      - id: "fail-tagging"
+        name: "Tagging Policy Failed"
+        type: "fail"
+        config:
+          message: "Asset does not have required tags"
+
+  # Pre-Creation Table Validation
+  - id: "table-pre-creation"
+    name: "Table Pre-Creation Validation"
+    description: "Validates table definitions before creation, including naming conventions and schema requirements."
+    trigger:
+      type: "before_create"
+      entity_types:
+        - "table"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "validate-table-name"
+        name: "Validate Table Name"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT obj.name MATCHES '^[a-z][a-z0-9_]*$'
+            ON_FAIL FAIL 'Table name must be lowercase with underscores only (e.g., my_table)'
+        on_pass: "validate-no-reserved-words"
+        on_fail: "fail-invalid-name"
+
+      - id: "validate-no-reserved-words"
+        name: "Check Reserved Words"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT NOT (obj.name = 'table' OR obj.name = 'select' OR obj.name = 'insert' OR obj.name = 'update' OR obj.name = 'delete' OR obj.name = 'from' OR obj.name = 'where')
+            ON_FAIL FAIL 'Table name cannot be a SQL reserved word'
+        on_pass: "success"
+        on_fail: "fail-reserved-word"
+
+      - id: "success"
+        name: "Table Validation Passed"
+        type: "pass"
+
+      - id: "fail-invalid-name"
+        name: "Invalid Table Name"
+        type: "fail"
+        config:
+          message: "Table name must be lowercase with underscores only"
+
+      - id: "fail-reserved-word"
+        name: "Reserved Word Used"
+        type: "fail"
+        config:
+          message: "Table name cannot be a SQL reserved word"
+
+  # =========================================================================
+  # Request-Based Workflows
+  # =========================================================================
+
+  # Data Contract Review Request
+  - id: "contract-review-request"
+    name: "Data Contract Review Request"
+    description: "Handles data contract review requests with data steward approval and creates a formal asset review record."
+    trigger:
+      type: "on_request_review"
+      entity_types:
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your data contract review request has been submitted. A data steward will review it shortly."
+        on_pass: "create-review"
+
+      - id: "create-review"
+        name: "Create Asset Review"
+        type: "create_asset_review"
+        config:
+          reviewer_role: "DataSteward"
+          review_type: "standard"
+          notes: "Data contract review requested via workflow"
+          use_entity_as_asset: true
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Data Steward Approval"
+        type: "approval"
+        config:
+          approvers: "DataSteward"
+          timeout_days: 7
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Approval"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your data contract has been approved and is ready for the next step."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Rejection"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your data contract review request has been denied. Please review the feedback."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Contract Review Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Contract Review Rejected"
+        type: "fail"
+        config:
+          message: "Data contract review request was rejected"
+
+  # Data Contract Publish Request
+  - id: "contract-publish-request"
+    name: "Data Contract Publish Request"
+    description: "Handles requests to publish data contracts to the marketplace with approver authorization."
+    trigger:
+      type: "on_request_publish"
+      entity_types:
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Publish Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your request to publish the data contract to the marketplace has been submitted."
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Contract Approver Authorization"
+        type: "approval"
+        config:
+          approvers: "ContractApprover"
+          timeout_days: 5
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Publish Approved"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your data contract has been approved for publishing to the marketplace."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Publish Rejected"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your publish request has been denied. Please review the feedback."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Publish Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Publish Rejected"
+        type: "fail"
+        config:
+          message: "Data contract publish request was rejected"
+
+  # Data Product Review Request
+  - id: "product-review-request"
+    name: "Data Product Review Request"
+    description: "Handles data product review requests with domain owner approval and creates a formal asset review record."
+    trigger:
+      type: "on_request_review"
+      entity_types:
+        - "data_product"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your data product review request has been submitted."
+        on_pass: "create-review"
+
+      - id: "create-review"
+        name: "Create Asset Review"
+        type: "create_asset_review"
+        config:
+          reviewer_role: "DomainOwner"
+          review_type: "standard"
+          notes: "Data product review requested via workflow"
+          use_entity_as_asset: true
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Domain Owner Approval"
+        type: "approval"
+        config:
+          approvers: "DomainOwner"
+          timeout_days: 7
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Approval"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your data product has been approved and is ready for publication."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Rejection"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your data product review request has been denied."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Product Review Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Product Review Rejected"
+        type: "fail"
+        config:
+          message: "Data product review request was rejected"
+
+  # Access Grant Request
+  - id: "access-grant-request"
+    name: "Access Grant Request"
+    description: "Handles access grant requests with admin approval."
+    trigger:
+      type: "on_request_access"
+      entity_types:
+        - "access_grant"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Access Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your access request has been submitted and is pending approval."
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Admin Approval"
+        type: "approval"
+        config:
+          approvers: "Admin"
+          timeout_days: 3
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Access Approved"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your access request has been approved. You now have access to the requested resource."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Access Rejected"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your access request has been denied. Please contact an administrator for more information."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Access Granted"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Access Denied"
+        type: "fail"
+        config:
+          message: "Access request was denied"
+
+  # Status Change Request (Generic)
+  - id: "status-change-request"
+    name: "Status Change Request"
+    description: "Handles status change requests for data products that require approval."
+    trigger:
+      type: "on_request_status_change"
+      entity_types:
+        - "data_product"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Status Change Request"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your status change request has been submitted for approval."
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Admin Approval"
+        type: "approval"
+        config:
+          approvers: "Admin"
+          timeout_days: 5
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Status Change Approved"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your status change request has been approved."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Status Change Rejected"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your status change request has been denied."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Status Change Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Status Change Rejected"
+        type: "fail"
+        config:
+          message: "Status change request was rejected"
+
+  # =========================================================================
+  # Data Asset Review Workflows
+  # =========================================================================
+
+  # Data Asset Review Request
+  - id: "data-asset-review-request"
+    name: "Data Asset Review Request"
+    description: "Handles data asset review requests with reviewer notification and approval."
+    trigger:
+      type: "on_request_review"
+      entity_types:
+        - "data_asset_review"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-reviewer"
+        name: "Notify Reviewer"
+        type: "notification"
+        config:
+          recipients: "owner"
+          template: "request_submitted"
+          custom_message: "A new data asset review request has been assigned to you."
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Reviewer Approval"
+        type: "approval"
+        config:
+          approvers: "DataSteward"
+          timeout_days: 7
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Review Approved"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your data asset review has been completed and approved."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Review Needs Changes"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your data asset review requires changes. Please review the feedback."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Review Completed"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Review Needs Changes"
+        type: "fail"
+        config:
+          message: "Data asset review requires changes"
+
+  # =========================================================================
+  # Project Access Request Workflow
+  # =========================================================================
+
+  - id: "project-access-request"
+    name: "Project Access Request"
+    description: "Handles project access requests with team member notification."
+    trigger:
+      type: "on_request_access"
+      entity_types:
+        - "project"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your project access request has been submitted to the project team."
+        on_pass: "notify-team"
+
+      - id: "notify-team"
+        name: "Notify Project Team"
+        type: "notification"
+        config:
+          recipients: "owner"
+          template: "request_submitted"
+          custom_message: "A user has requested access to your project."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Request Submitted"
+        type: "pass"
+
+  # =========================================================================
+  # Role Access Request Workflow
+  # =========================================================================
+
+  - id: "role-access-request"
+    name: "Role Access Request"
+    description: "Handles role access requests with approver notification and approval workflow."
+    trigger:
+      type: "on_request_access"
+      entity_types:
+        - "role"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Confirm Request Received"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your role access request has been submitted for approval."
+        on_pass: "request-approval"
+
+      - id: "request-approval"
+        name: "Request Admin Approval"
+        type: "approval"
+        config:
+          approvers: "Admin"
+          timeout_days: 5
+          require_all: false
+        on_pass: "notify-approved"
+        on_fail: "notify-rejected"
+
+      - id: "notify-approved"
+        name: "Notify Role Granted"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your role access request has been approved. Please contact an administrator to be added to the appropriate group."
+        on_pass: "success"
+
+      - id: "notify-rejected"
+        name: "Notify Role Denied"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your role access request has been denied."
+        on_pass: "fail-rejected"
+
+      - id: "success"
+        name: "Role Request Approved"
+        type: "pass"
+
+      - id: "fail-rejected"
+        name: "Role Request Rejected"
+        type: "fail"
+        config:
+          message: "Role access request was denied"
+
+  # =========================================================================
+  # Job Lifecycle Workflows
+  # =========================================================================
+
+  # Job Failure Notification
+  - id: "job-failure-notification"
+    name: "Job Failure Notification"
+    description: "Notifies administrators when a background job fails."
+    trigger:
+      type: "on_job_failure"
+      entity_types:
+        - "job"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-admins"
+        name: "Notify Administrators"
+        type: "notification"
+        config:
+          recipients: "Admin"
+          template: "validation_failed"
+          custom_message: "A background job has failed. Please check the job logs for details."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
+        type: "pass"
+
+  # Job Success Notification
+  - id: "job-success-notification"
+    name: "Job Success Notification"
+    description: "Notifies users when a background job completes successfully."
+    trigger:
+      type: "on_job_success"
+      entity_types:
+        - "job"
+    scope:
+      type: "all"
+    is_active: false  # Disabled by default to avoid notification spam
+    is_default: true
+    steps:
+      - id: "notify-requester"
+        name: "Notify Job Requester"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_approved"
+          custom_message: "Your background job has completed successfully."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
+        type: "pass"
+
+  # =========================================================================
+  # Subscription Workflows
+  # =========================================================================
+
+  # =========================================================================
+  # Access Grant Lifecycle Workflows
+  # =========================================================================
+
+  # Access Expiring Soon
+  - id: "access-expiring-warning"
+    name: "Access Expiring Warning"
+    description: "Notifies users when their access is about to expire."
+    trigger:
+      type: "on_expiring"
+      entity_types:
+        - "access_grant"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-grantee"
+        name: "Notify Grantee of Expiration"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "Your access is expiring soon. Contact the resource owner if you need to extend your access."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Warning Sent"
+        type: "pass"
+
+  # Access Revoked
+  - id: "access-revoked-notification"
+    name: "Access Revoked Notification"
+    description: "Notifies users when their access has been revoked."
+    trigger:
+      type: "on_revoke"
+      entity_types:
+        - "access_grant"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-grantee"
+        name: "Notify of Revocation"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_rejected"
+          custom_message: "Your access has been revoked. Contact an administrator if you believe this was done in error."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Revocation Notification Sent"
+        type: "pass"
+
+  # Default approval response workflow (replaces hardcoded approval dialog)
+  # Used when an approver responds to a process workflow approval request.
+  # Looked up by trigger type for_approval_response; name is for display only.
+  - id: "approval-response"
+    name: "Approval response"
+    description: "Default workflow for approval response: enter a reason and approve or reject."
+    workflow_type: "approval"
+    trigger:
+      type: "for_approval_response"
+      entity_types: []
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "enter-reason"
+        name: "Enter a reason"
+        type: "user_action"
+        config:
+          title: "Enter a reason"
+          description: "Provide a reason for your approval or rejection decision."
+          requires_input: true
+          minimum_input_length: 10
+          primary_field_id: "reason"
+          required_fields:
+            - id: "reason"
+              label: "Reason for approval or rejection"
+              type: "text"
+              required: true
+        on_pass: "done"
+        on_fail: "done"
+      - id: "done"
+        name: "Done"
+        type: "pass"
+
+  # Default subscription / contract signing workflow (product or dataset subscribe)
+  # Used when user subscribes via the approval wizard; completion_action=subscribe runs subscribe after wizard.
+  # Looked up by trigger type for_subscribe; name is for display only.
+  # Demonstrates the full approval step catalog: legal_document → acknowledgement_checklist → user_action → pass.
+  #
+  # i18n note (PR #315 review): user-facing strings in this seed workflow
+  # (titles, descriptions, ack labels, item labels, body markdown) are English
+  # defaults intended to be customised per-deployment by the data governance
+  # team using the Workflow Designer UI. They are NOT loaded through the app's
+  # i18n bundles because the workflow definition itself is mutable customer
+  # content — once saved to the DB, the strings are part of the workflow
+  # snapshot and audit trail. Operators replacing these defaults are expected
+  # to localise into their organisation's language; the framework supports it
+  # because every visible string is configurable, not because the seed file
+  # is locale-aware.
+  - id: "subscription"
+    name: "Subscription Agreement"
+    description: "Full approval workflow for subscribing to a data product — terms review, acknowledgements, and agreement."
+    workflow_type: "approval"
+    trigger:
+      type: "for_subscribe"
+      entity_types: []
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "review-terms"
+        name: "Review Terms"
+        type: "legal_document"
+        config:
+          title: "Terms of Service"
+          description: "Please review the following terms before subscribing."
+          body_markdown: "# Data Product Terms of Service\n\nBy subscribing to this data product, you agree to the following:\n\n1. **Acceptable Use** — You will use the data only for authorized business purposes.\n2. **Confidentiality** — You will not share raw data outside your organization.\n3. **Retention** — Data will be retained according to your organization's data retention policy.\n4. **Compliance** — You will comply with all applicable data protection regulations.\n5. **Termination** — The data product owner may revoke access for policy violations."
+          require_scroll_to_end: true
+          require_acknowledgement_checkbox: true
+          acknowledgement_label: "I have read and understood the Terms of Service"
+        on_pass: "accept-terms"
+        order: 0
+      - id: "accept-terms"
+        name: "Accept Terms"
+        type: "acknowledgement_checklist"
+        config:
+          title: "Acknowledgements"
+          description: "Please confirm each item below."
+          items:
+            - id: "accept_tos"
+              label: "I accept the Terms of Service"
+              required: true
+            - id: "accept_data_use"
+              label: "I will use this data only for authorized purposes"
+              required: true
+            - id: "accept_retention"
+              label: "I understand the data retention policy applies"
+              required: true
+        on_pass: "subscription-details"
+        order: 1
+      - id: "subscription-details"
+        name: "Subscription Details"
+        type: "user_action"
+        config:
+          title: "Subscription Details"
+          description: "Provide details about your intended use of this data product."
+          required_fields:
+            - id: "reason"
+              label: "Reason for subscribing"
+              type: "text"
+              required: true
+            - id: "use_case"
+              label: "Intended use case"
+              type: "text"
+              required: false
+          requires_input: true
+          minimum_input_length: 10
+        on_pass: "persist"
+        order: 2
+      - id: "persist"
+        name: "Save Agreement"
+        type: "persist_agreement"
+        config: {}
+        on_pass: "generate-pdf"
+        order: 3
+      - id: "generate-pdf"
+        name: "Generate PDF"
+        type: "generate_pdf"
+        config: {}
+        on_pass: "deliver-agreement"
+        order: 4
+      - id: "deliver-agreement"
+        name: "Deliver Agreement"
+        type: "deliver"
+        config:
+          channels:
+            - "in_app"
+          recipients:
+            - "signer"
+            - "entity_owner"
+        on_pass: "done"
+        order: 5
+      - id: "done"
+        name: "Complete"
+        type: "pass"
+        config: {}
+        order: 6
+
+  # =========================================================================
+  # FOR_REQUEST_* Wizard Workflows (match ON_REQUEST_* process triggers)
+  # =========================================================================
+
+  # Review request wizard (matches ON_REQUEST_REVIEW)
+  - id: "request-review"
+    name: "Request Review"
+    description: "Wizard shown before submitting a review request. Collects a reason from the requester."
+    workflow_type: "approval"
+    trigger:
+      type: "for_request_review"
+      entity_types: []
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "reason"
+        name: "Provide a reason"
+        type: "user_action"
+        config:
+          title: "Request review"
+          description: "Provide a reason for your review request."
+          requires_input: true
+          minimum_input_length: 10
+          primary_field_id: "reason"
+          required_fields:
+            - id: "reason"
+              label: "Why are you requesting a review?"
+              type: "text"
+              required: true
+        on_pass: "done"
+        on_fail: "done"
+      - id: "done"
+        name: "Done"
+        type: "pass"
+
+  # Access request wizard (matches ON_REQUEST_ACCESS)
+  - id: "request-access"
+    name: "Request Access"
+    description: "Wizard shown before submitting an access request. Collects a reason and optional duration."
+    workflow_type: "approval"
+    trigger:
+      type: "for_request_access"
+      entity_types: []
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "reason"
+        name: "Provide a reason"
+        type: "user_action"
+        config:
+          title: "Request access"
+          description: "Provide a reason for your access request and optionally set a duration."
+          requires_input: true
+          minimum_input_length: 10
+          primary_field_id: "reason"
+          required_fields:
+            - id: "reason"
+              label: "Why do you need access?"
+              type: "text"
+              required: true
+            - id: "expiry_days"
+              label: "Requested duration (days, leave blank for indefinite)"
+              type: "text"
+              required: false
+        on_pass: "done"
+        on_fail: "done"
+      - id: "done"
+        name: "Done"
+        type: "pass"
+
+  # Publish/deploy request wizard (matches ON_REQUEST_PUBLISH)
+  - id: "request-publish"
+    name: "Request Publish"
+    description: "Wizard shown before submitting a publish or deployment request. Collects a reason."
+    workflow_type: "approval"
+    trigger:
+      type: "for_request_publish"
+      entity_types: []
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "reason"
+        name: "Provide a reason"
+        type: "user_action"
+        config:
+          title: "Request publish"
+          description: "Provide a reason for your publish/deployment request."
+          requires_input: true
+          minimum_input_length: 10
+          primary_field_id: "reason"
+          required_fields:
+            - id: "reason"
+              label: "Why are you requesting publish/deployment?"
+              type: "text"
+              required: true
+        on_pass: "done"
+        on_fail: "done"
+      - id: "done"
+        name: "Done"
+        type: "pass"
+
+  # Status change request wizard (matches ON_REQUEST_STATUS_CHANGE)
+  - id: "request-status-change"
+    name: "Request Status Change"
+    description: "Wizard shown before submitting a status change request. Collects a reason."
+    workflow_type: "approval"
+    trigger:
+      type: "for_request_status_change"
+      entity_types: []
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "reason"
+        name: "Provide a reason"
+        type: "user_action"
+        config:
+          title: "Request status change"
+          description: "Provide a reason for your status change request."
+          requires_input: true
+          minimum_input_length: 10
+          primary_field_id: "reason"
+          required_fields:
+            - id: "reason"
+              label: "Why are you requesting this status change?"
+              type: "text"
+              required: true
+        on_pass: "done"
+        on_fail: "done"
+      - id: "done"
+        name: "Done"
+        type: "pass"
+
+  # =========================================================================
+  # Before Status Change (Gating) Workflows
+  # =========================================================================
+
+  # Default before_status_change — no-op pass-through
+  - id: "before-status-change-default"
+    name: "Status Change Gate (Default)"
+    description: "Default gating workflow for status transitions. Passes through without blocking. Override to add validation, policy checks, or approval gates for specific from/to status pairs."
+    trigger:
+      type: "before_status_change"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "success"
+        name: "Transition Allowed"
+        type: "pass"
+
+  # =========================================================================
+  # Publication Workflows
+  # =========================================================================
+
+  # On Publish notification
+  - id: "on-publish-notification"
+    name: "Publish Notification"
+    description: "Notifies the owner when an entity is published to the marketplace."
+    trigger:
+      type: "on_publish"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-owner"
+        name: "Notify Owner"
+        type: "notification"
+        config:
+          recipients: "owner"
+          template: "request_approved"
+          custom_message: "${entity_type} '${entity_name}' has been published to the marketplace."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
+        type: "pass"
+
+  # On Unpublish notification
+  - id: "on-unpublish-notification"
+    name: "Unpublish Notification"
+    description: "Notifies the owner when an entity is unpublished from the marketplace."
+    trigger:
+      type: "on_unpublish"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-owner"
+        name: "Notify Owner"
+        type: "notification"
+        config:
+          recipients: "owner"
+          template: "validation_failed"
+          custom_message: "${entity_type} '${entity_name}' has been unpublished from the marketplace."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Notification Sent"
+        type: "pass"
+
+  # Certification Request Review Workflow
+  - id: "certification-request-review"
+    name: "Certification Request Review"
+    description: "Routes certification requests through an approval workflow. When approved, the entity is automatically certified at the requested level."
+    trigger:
+      type: "on_request_certify"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-owner"
+        name: "Notify Entity Owner"
+        type: "notification"
+        config:
+          recipients: "entity_owner"
+          template: "action_required"
+          custom_message: "Certification has been requested for ${entity_type} '${entity_name}' by ${user_email}."
+        on_pass: "approval-gate"
+        on_fail: "approval-gate"
+
+      - id: "approval-gate"
+        name: "Certification Approval"
+        type: "approval"
+        config:
+          approver_role: "data_steward"
+          message: "Please review the certification request for ${entity_type} '${entity_name}'."
+          timeout_hours: 168
+        on_pass: "certify-entity"
+        on_fail: "notify-denied"
+
+      - id: "certify-entity"
+        name: "Apply Certification"
+        type: "entity_action"
+        config:
+          action: "certify"
+          level_source: "from_request"
+        on_pass: "notify-approved"
+        on_fail: "notify-error"
+
+      - id: "notify-approved"
+        name: "Notify Requester (Approved)"
+        type: "notification"
+        config:
+          recipients: "trigger_user"
+          template: "success"
+          custom_message: "Your certification request for '${entity_name}' has been approved."
+        on_pass: "done"
+        on_fail: "done"
+
+      - id: "notify-denied"
+        name: "Notify Requester (Denied)"
+        type: "notification"
+        config:
+          recipients: "trigger_user"
+          template: "warning"
+          custom_message: "Your certification request for '${entity_name}' has been denied."
+        on_pass: "done"
+        on_fail: "done"
+
+      - id: "notify-error"
+        name: "Notify Error"
+        type: "notification"
+        config:
+          recipients: "trigger_user"
+          template: "error"
+          custom_message: "An error occurred while processing the certification for '${entity_name}'."
+        on_pass: "fail-end"
+        on_fail: "fail-end"
+
+      - id: "done"
+        name: "Complete"
+        type: "pass"
+
+      - id: "fail-end"
+        name: "Failed"
+        type: "fail"
+        config:
+          message: "Certification workflow failed"
+
+  # Publication Request Review Workflow
+  - id: "publication-request-review"
+    name: "Publication Request Review"
+    description: "Routes publication requests through an approval workflow. When approved, the entity is automatically published with the requested scope."
+    trigger:
+      type: "on_request_publish"
+      entity_types:
+        - "data_product"
+        - "data_contract"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "validate-status"
+        name: "Validate Entity Status"
+        type: "validation"
+        config:
+          rule: |
+            MATCH (obj:Object)
+            ASSERT obj.status == 'active'
+            ON_FAIL FAIL 'Entity must be in active status to be published'
+        on_pass: "notify-owner"
+        on_fail: "notify-invalid"
+
+      - id: "notify-owner"
+        name: "Notify Entity Owner"
+        type: "notification"
+        config:
+          recipients: "entity_owner"
+          template: "action_required"
+          custom_message: "Publication has been requested for ${entity_type} '${entity_name}' by ${user_email}."
+        on_pass: "approval-gate"
+        on_fail: "approval-gate"
+
+      - id: "approval-gate"
+        name: "Publication Approval"
+        type: "approval"
+        config:
+          approver_role: "data_steward"
+          message: "Please review the publication request for ${entity_type} '${entity_name}'."
+          timeout_hours: 168
+        on_pass: "publish-entity"
+        on_fail: "notify-denied"
+
+      - id: "publish-entity"
+        name: "Apply Publication"
+        type: "entity_action"
+        config:
+          action: "publish"
+          scope_source: "from_request"
+        on_pass: "notify-approved"
+        on_fail: "notify-error"
+
+      - id: "notify-approved"
+        name: "Notify Requester (Approved)"
+        type: "notification"
+        config:
+          recipients: "trigger_user"
+          template: "success"
+          custom_message: "Your publication request for '${entity_name}' has been approved and published."
+        on_pass: "done"
+        on_fail: "done"
+
+      - id: "notify-denied"
+        name: "Notify Requester (Denied)"
+        type: "notification"
+        config:
+          recipients: "trigger_user"
+          template: "warning"
+          custom_message: "Your publication request for '${entity_name}' has been denied."
+        on_pass: "done"
+        on_fail: "done"
+
+      - id: "notify-invalid"
+        name: "Notify Invalid Status"
+        type: "notification"
+        config:
+          recipients: "trigger_user"
+          template: "error"
+          custom_message: "Publication request for '${entity_name}' was rejected: entity must be in active status."
+        on_pass: "fail-end"
+        on_fail: "fail-end"
+
+      - id: "notify-error"
+        name: "Notify Error"
+        type: "notification"
+        config:
+          recipients: "trigger_user"
+          template: "error"
+          custom_message: "An error occurred while publishing '${entity_name}'."
+        on_pass: "fail-end"
+        on_fail: "fail-end"
+
+      - id: "done"
+        name: "Complete"
+        type: "pass"
+
+      - id: "fail-end"
+        name: "Failed"
+        type: "fail"
+        config:
+          message: "Publication workflow failed"
+
+
+  # =========================================================================
+  # ON_FIRST_ACCESS — Welcome / Terms-of-Use disclaimer
+  # =========================================================================
+  # Replaces the legacy hardcoded welcome-disclaimer dialog. End-users see this
+  # workflow as a wizard on app mount when:
+  #   1. is_active = true (admin enables in Designer)
+  #   2. they have no `agreements` row at the workflow's current `version`
+  # When admin edits the legal_document body, workflow.version increments and
+  # every user is re-prompted on next mount. Consent record IS the agreements
+  # row keyed on (created_by=user_email, workflow_id, workflow_version).
+  #
+  # Disabled by default — the seed exists so admins can enable + customise the
+  # text rather than authoring a workflow from scratch. Strings are English
+  # defaults; customise in Designer per deployment language.
+  - id: "first-access-welcome"
+    name: "Welcome — Terms of Use"
+    description: "Shown to every user the first time they open the app, and again when the text changes."
+    workflow_type: "approval"
+    trigger:
+      type: "on_first_access"
+      entity_types: ["user"]
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "tou"
+        name: "Terms of Use"
+        type: "legal_document"
+        config:
+          title: "Welcome to Ontos"
+          description: "Please review the following before continuing."
+          body_markdown: "# Welcome\n\nBy using this application you agree to:\n\n1. Use it only for authorised business purposes.\n2. Treat any data you access as confidential according to your organisation's data classification policy.\n3. Report security concerns to your data governance team.\n\nReplace this text in **Settings → Workflows → Welcome — Terms of Use** to match your organisation's acceptable-use policy."
+          require_scroll_to_end: false
+          require_acknowledgement_checkbox: true
+          acknowledgement_label: "I understand and accept these terms"
+        on_pass: "persist"
+        order: 0
+      - id: "persist"
+        name: "Record Acceptance"
+        type: "persist_agreement"
+        config: {}
+        on_pass: "done"
+        order: 1
+      - id: "done"
+        name: "Complete"
+        type: "pass"
+        config: {}
+        order: 2
+
+  # =========================================================================
+  # ON_REQUEST_ACCESS — Reference grant_permissions Process workflow
+  # =========================================================================
+  # Reference shape for a Process workflow that grants UC permissions to the
+  # requester after an access-grant request is submitted. Disabled by default —
+  # the seed exists so admins can copy + customise rather than authoring from
+  # scratch.
+  #
+  # Pattern: the FQN of the UC securable to grant on must be passed via the
+  # wizard's ``wizard_data.target_full_name`` field (or computed in a
+  # preceding step) and read here via ``target_variable: entity.target_full_name``.
+  # ``target_source: from_entity`` does NOT work for this trigger because the
+  # trigger entity is the access-grant request itself (a UUID), not a UC object.
+  #
+  # ⚠ Deployment requirement (caught during PR #353 E2E, 2026-05-08):
+  # the app's service principal must have explicit ``MANAGE`` on every UC
+  # securable Ontos will grant on. ``ALL_PRIVILEGES`` alone is NOT sufficient on
+  # AWS UC — the platform rejects the grant call with ``"User does not have MANAGE"``.
+  # Document this in customer deployment runbooks alongside the SP setup steps.
+  - id: "on-request-access-grant-permissions-reference"
+    name: "Reference — Grant UC SELECT to requester (on_request_access)"
+    description: "After an access-grant request is submitted, grants SELECT on the requested UC securable to the requester. The FQN must be passed via wizard_data.target_full_name."
+    workflow_type: "process"
+    trigger:
+      type: "on_request_access"
+      entity_types: ["access_grant"]
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "grant"
+        name: "Grant SELECT to requester"
+        type: "grant_permissions"
+        config:
+          permission_type: "SELECT"
+          target_source: "from_variable"
+          target_variable: "entity.target_full_name"
+          principal_source: "requester"
+        order: 0

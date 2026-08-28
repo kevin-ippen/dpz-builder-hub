@@ -1,0 +1,90 @@
+{
+  "rebuildGraph": "Ricostruisci grafo",
+  "rebuildingGraph": "Ricostruzione…",
+  "rebuildGraphTooltip": "Ricarica ontologie, fonti implicite e oggetti dell'app in modo che tutto sia interrogabile.",
+  "title": "Browser dei concetti",
+  "subtitle": "Gestisci glossari aziendali e definizioni semantiche",
+  "newModel": "Nuovo Glossario",
+  "newTerm": "Nuovo Termine",
+  "searchPlaceholder": "Cerca termini...",
+  "loading": "Caricamento modelli semantici...",
+  "linkedObjects": {
+    "title": "Entità collegate",
+    "assign": "Assegna entità",
+    "loading": "Caricamento entità collegate...",
+    "empty": "Nessuna entità collegata a questo concetto.",
+    "removed": "Collegamento a \"{{label}}\" rimosso.",
+    "removeFailed": "Impossibile rimuovere il collegamento.",
+    "removeAria": "Rimuovi entità collegata"
+  },
+  "relations": {
+    "title": "Relazioni",
+    "loading": "Caricamento relazioni...",
+    "empty": "Nessuna relazione trovata.",
+    "outgoingTooltip": "Questo concetto → destinazione",
+    "incomingTooltip": "Origine → questo concetto"
+  },
+  "neighborhood": {
+    "title": "Vicinato del concetto",
+    "loading": "Caricamento del vicinato...",
+    "empty": "Nessun concetto correlato.",
+    "moreParents": "+{{count}} altri",
+    "moreChildren": "+{{count}} altri"
+  },
+  "filters": {
+    "allGlossaries": "Tutti i Glossari",
+    "allStatus": "Tutti gli Stati",
+    "bySource": "Filtra per Fonte",
+    "all": "Tutti",
+    "none": "Nessuno",
+    "groupBySource": "Raggruppa per Fonte"
+  },
+  "table": {
+    "name": "Nome",
+    "glossary": "Glossario",
+    "definition": "Definizione",
+    "status": "Stato",
+    "updated": "Aggiornato",
+    "actions": "Azioni"
+  },
+  "messages": {
+    "success": "Successo",
+    "error": "Errore",
+    "deleteConfirm": "Sei sicuro di voler eliminare questo termine?",
+    "deleteSuccess": "Termine eliminato con successo",
+    "deleteError": "Impossibile eliminare il termine"
+  },
+  "status": {
+    "draft": "Bozza",
+    "pending": "In attesa",
+    "in_review": "In revisione",
+    "under_review": "In revisione",
+    "active": "Attivo",
+    "approved": "Approvato",
+    "certified": "Certificato",
+    "deprecated": "Obsoleto",
+    "retired": "Ritirato"
+  },
+  "details": {
+    "backToList": "Torna ai Concetti",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "notFound": "Concetto non trovato",
+    "loading": "Caricamento...",
+    "linkedAssets": "Asset Collegati",
+    "synonyms": "Sinonimi",
+    "relatedTerms": "Termini Correlati"
+  },
+  "form": {
+    "createTitle": "Crea Termine",
+    "editTitle": "Modifica Termine",
+    "name": "Nome",
+    "glossary": "Glossario",
+    "definition": "Definizione",
+    "synonyms": "Sinonimi",
+    "status": "Stato",
+    "cancel": "Annulla",
+    "save": "Salva"
+  }
+}
+

@@ -1,0 +1,471 @@
+name: Test Coverage
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+  # Required by the merge queue: GitHub builds each batch on a temporary
+  # gh-readonly-queue/<base>/... branch and fires a merge_group event. The
+  # required status checks must run on that event or queued PRs hang forever
+  # waiting on checks that never report.
+  merge_group:
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  backend-tests:
+    name: Backend Tests
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        working-directory: ./src
+        run: |
+          python -m pip install --upgrade pip
+          pip install "virtualenv<21" hatch==1.16.3
+          hatch -e dev run pip install --require-hashes -r backend/requirements.txt
+
+      - name: Run tests with coverage
+        working-directory: ./src
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_WAREHOUSE_ID: test_warehouse_id
+          DATABRICKS_CATALOG: test_catalog
+          DATABRICKS_SCHEMA: test_schema
+          DATABRICKS_VOLUME: test_volume
+          APP_AUDIT_LOG_DIR: /tmp/audit_logs
+        run: |
+          hatch -e dev run pytest \
+            --cov=backend/src \
+            --cov-report=xml \
+            --cov-report=term \
+            --cov-report=html \
+            -v
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./src/coverage.xml
+          flags: backend
+          name: backend-coverage
+          # Required for uploads to protected branches (main/development). Without
+          # it Codecov rejects the upload ("Token required because branch is
+          # protected") while the step stays green due to fail_ci_if_error:false,
+          # which silently froze the coverage badges. Forks have no access to the
+          # secret and fall back to tokenless PR uploads, so this is safe there.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: backend-coverage-html
+          path: ./src/backend/htmlcov/
+
+      - name: Check coverage threshold
+        working-directory: ./src
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_WAREHOUSE_ID: test_warehouse_id
+          DATABRICKS_CATALOG: test_catalog
+          DATABRICKS_SCHEMA: test_schema
+          DATABRICKS_VOLUME: test_volume
+          APP_AUDIT_LOG_DIR: /tmp/audit_logs
+        run: |
+          # Gate set to current baseline (~33.7%) minus a small buffer.
+          # Coverage jumped because pytest now collects backend/src/tests/unit/
+          # in addition to backend/tests/. Ratchet up toward the 80% goal as
+          # quarantined modules in tests/unit/conftest.py are fixed.
+          hatch -e dev run coverage report --fail-under=30
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-node-jfrog
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        working-directory: ./src/frontend
+        run: npm ci
+
+      - name: Run tests with coverage
+        working-directory: ./src/frontend
+        run: npm run test:coverage
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./src/frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+          # See note on the backend upload step above: required so uploads to
+          # protected branches are accepted instead of silently rejected.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: frontend-coverage-html
+          path: ./src/frontend/coverage/
+
+      - name: Check coverage threshold
+        working-directory: ./src/frontend
+        run: |
+          # vitest already fails if thresholds not met (configured in vitest.config.ts)
+          echo "Coverage thresholds checked by vitest"
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 20
+    # E2E tests temporarily disabled on all branches
+    if: false
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ontos_test
+          POSTGRES_PASSWORD: ontos_test_pw
+          POSTGRES_DB: app_ontos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.11'
+
+      - uses: ./.github/actions/setup-node-jfrog
+        with:
+          node-version: '24'
+
+      - name: Install backend dependencies
+        working-directory: ./src
+        run: |
+          python -m pip install --upgrade pip
+          pip install "virtualenv<21" hatch==1.16.3
+          hatch -e dev run pip install --require-hashes -r backend/requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: ./src/frontend
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('src/frontend/package.json') }}
+
+      - name: Install Playwright browsers
+        working-directory: ./src/frontend
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright OS deps only
+        working-directory: ./src/frontend
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Start backend server
+        working-directory: ./src
+        env:
+          ENV: LOCAL
+          DEBUG: "true"
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: ontos_test
+          POSTGRES_PASSWORD: ontos_test_pw
+          POSTGRES_DB: app_ontos
+          DATABRICKS_HOST: https://mock.databricks.com
+          DATABRICKS_WAREHOUSE_ID: mock_warehouse_id
+          DATABRICKS_CATALOG: test_catalog
+          DATABRICKS_SCHEMA: test_schema
+          DATABRICKS_VOLUME: test_volume
+          APP_AUDIT_LOG_DIR: /tmp/audit_logs
+          APP_DEMO_MODE: "true"
+          APP_DB_DROP_ON_START: "true"
+          MOCK_WORKSPACE_CLIENT: "true"
+          TESTING: "true"
+        run: |
+          mkdir -p /tmp/audit_logs
+          hatch -e dev run uvicorn --app-dir backend src.app:app \
+            --host 0.0.0.0 --port 8000 &
+          # Wait for backend to be ready
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/api/time > /dev/null 2>&1; then
+              echo "Backend is ready"
+              break
+            fi
+            echo "Waiting for backend... ($i/60)"
+            sleep 2
+          done
+          curl -sf http://localhost:8000/api/time || (echo "Backend failed to start" && exit 1)
+
+      - name: Run E2E tests
+        working-directory: ./src/frontend
+        env:
+          BASE_URL: http://localhost:3000
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: playwright-report
+          path: ./src/frontend/playwright-report/
+          retention-days: 7
+
+      - name: Upload test results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: playwright-results
+          path: ./src/frontend/test-results/
+          retention-days: 7
+
+  type-check:
+    name: TypeScript Type Check
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-node-jfrog
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        working-directory: ./src/frontend
+        run: npm ci
+
+      - name: Run type check
+        working-directory: ./src/frontend
+        run: npm run type-check
+
+  check-lockfiles:
+    name: Requirements Lockfile Check
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Check out the PR head branch (not the merge commit) so we can push back.
+          # Falls back to the default ref for push events.
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          # Use a PAT (LOCKFILE_BOT_TOKEN) so that auto-commits trigger CI on
+          # the new SHA. Pushes made with the default GITHUB_TOKEN do NOT
+          # re-trigger workflows. Falls back to GITHUB_TOKEN for read-only
+          # checkout when the secret isn't configured (older forks, etc.).
+          token: ${{ secrets.LOCKFILE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.10'
+          installer: uv
+          cache: ''
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Regenerate lockfiles
+        run: ./scripts/lock-requirements.sh
+
+      - name: Detect lockfile drift
+        id: drift
+        run: |
+          if git diff --quiet src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt; then
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+            echo "Lockfiles are up to date."
+          else
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+            echo "Lockfile drift detected — will auto-commit on same-repo PRs."
+            git --no-pager diff --stat src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt
+          fi
+
+      - name: Detect fork PR
+        id: fork
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "is_fork=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Auto-commit lockfile updates to PR branch
+        if: github.event_name == 'pull_request' && steps.drift.outputs.drifted == 'true' && steps.fork.outputs.is_fork == 'false'
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt
+          git commit -m "chore: regenerate requirements lockfiles"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          echo "Pushed regenerated lockfiles to ${{ github.event.pull_request.head.ref }}."
+          echo "CI will re-run on the new SHA (requires LOCKFILE_BOT_TOKEN secret to be a PAT)."
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.drift.outputs.drifted == 'true' && steps.fork.outputs.is_fork == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "Auto-regenerated \`requirements.txt\` lockfiles to match \`requirements.in\`."
+
+      - name: Fail if drift on fork PR, push to protected branch, or merge queue
+        # merge_group is included so a queued batch with stale lockfiles fails
+        # the queue instead of silently merging: the auto-commit fixup above is
+        # PR-only (it can't push to the read-only queue branch), so the queue
+        # must hard-fail on drift rather than skip the check.
+        if: steps.drift.outputs.drifted == 'true' && (github.event_name == 'push' || github.event_name == 'merge_group' || steps.fork.outputs.is_fork == 'true')
+        run: |
+          echo "ERROR: requirements.txt lockfiles are out of sync with .in files."
+          echo "Run ./scripts/lock-requirements.sh locally and commit the updated .txt files."
+          exit 1
+
+  check-alembic-heads:
+    name: Alembic Single-Head Check
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+    # Skip on PRs that intentionally carry a divergent migration branch.
+    # The label is the documented escape hatch for the rare case where two
+    # heads are deliberate and a merge revision is planned in the PR itself.
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'alembic-branch')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Fetch enough history to diff against the PR base.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.10'
+
+      - name: Install backend deps (for alembic)
+        working-directory: ./src
+        run: |
+          python -m pip install --upgrade pip
+          pip install "virtualenv<21" hatch==1.16.3
+          hatch -e dev run pip install --require-hashes -r backend/requirements.txt
+
+      - name: Fetch PR base ref
+        run: git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
+
+      - name: Enforce single alembic head + base-ancestry
+        working-directory: ./src
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: |
+          hatch -e dev run python ../scripts/check-alembic-heads.py
+
+  frontend-build:
+    name: Frontend Build Check
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-node-jfrog
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        working-directory: ./src/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./src/frontend
+        run: npm run build
+
+  coverage-report:
+    name: Coverage Report
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: backend-coverage-html
+          path: ./coverage/backend
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: frontend-coverage-html
+          path: ./coverage/frontend
+
+      - name: Create coverage summary
+        run: |
+          echo "# Test Coverage Summary" > coverage-summary.md
+          echo "" >> coverage-summary.md
+          echo "Coverage reports available in artifacts:" >> coverage-summary.md
+          echo "- Backend: coverage/backend/" >> coverage-summary.md
+          echo "- Frontend: coverage/frontend/" >> coverage-summary.md
+
+      - name: Upload combined coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: combined-coverage-reports
+          path: ./coverage/

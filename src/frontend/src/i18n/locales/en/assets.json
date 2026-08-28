@@ -1,0 +1,48 @@
+{
+  "title": "Assets",
+  "subtitle": "Cataloged objects with identity, metadata, and relationships.",
+  "addNew": "Add Asset",
+  "editAsset": "Edit Asset",
+  "deleteAsset": "Delete Asset",
+  "table": {
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "platform": "Platform",
+    "location": "Location",
+    "status": "Status",
+    "tags": "Tags",
+    "relationships": "Relationships",
+    "lastUpdated": "Last Updated",
+    "actions": "Actions"
+  },
+  "statuses": {
+    "active": "Active",
+    "deprecated": "Deprecated",
+    "archived": "Archived"
+  },
+  "permissions": {
+    "deniedView": "You do not have permission to view assets.",
+    "deniedCreate": "You do not have permission to create assets.",
+    "deniedEdit": "You do not have permission to edit assets.",
+    "deniedDelete": "You do not have permission to delete assets.",
+    "permissionDenied": "Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "Error fetching assets",
+    "errorDeleting": "Error deleting asset",
+    "deleted": "Asset Deleted",
+    "deletedSuccess": "The asset was successfully deleted.",
+    "errorLoadingData": "Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "Delete Asset?",
+    "description": "This action cannot be undone. This will permanently delete the asset and all its relationships.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "emptyState": {
+    "title": "No assets registered yet",
+    "description": "Register your first asset to start cataloging."
+  }
+}

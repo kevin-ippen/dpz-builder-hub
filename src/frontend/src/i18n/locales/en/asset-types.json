@@ -1,0 +1,77 @@
+{
+  "title": "Asset Types",
+  "subtitle": "Reusable templates that define how different kinds of assets are structured.",
+  "addNew": "Add Asset Type",
+  "editAssetType": "Edit Asset Type",
+  "deleteAssetType": "Delete Asset Type",
+  "table": {
+    "name": "Name",
+    "description": "Description",
+    "category": "Category",
+    "status": "Status",
+    "assetCount": "Assets",
+    "lastUpdated": "Last Updated",
+    "actions": "Actions"
+  },
+  "categories": {
+    "data": "Data",
+    "analytics": "Analytics",
+    "integration": "Integration",
+    "system": "System",
+    "custom": "Custom"
+  },
+  "statuses": {
+    "active": "Active",
+    "deprecated": "Deprecated"
+  },
+  "permissions": {
+    "deniedView": "You do not have permission to view asset types.",
+    "deniedCreate": "You do not have permission to create asset types.",
+    "deniedEdit": "You do not have permission to edit asset types.",
+    "deniedDelete": "You do not have permission to delete asset types.",
+    "permissionDenied": "Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "Error fetching asset types",
+    "errorDeleting": "Error deleting asset type",
+    "deleted": "Asset Type Deleted",
+    "deletedSuccess": "The asset type was successfully deleted.",
+    "errorLoadingData": "Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "Delete Asset Type?",
+    "description": "This action cannot be undone. Existing assets of this type may become orphaned.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "emptyState": {
+    "title": "No asset types defined yet",
+    "description": "Create your first asset type to start defining asset templates."
+  },
+  "form": {
+    "createTitle": "Create Asset Type",
+    "createDescription": "Add a new asset type template.",
+    "editTitle": "Edit Asset Type",
+    "editDescription": "Update the details of this asset type.",
+    "create": "Create",
+    "update": "Save Changes",
+    "noCategory": "No category",
+    "labels": {
+      "icon": "Icon"
+    },
+    "placeholders": {
+      "name": "e.g., Dashboard",
+      "description": "Describe this asset type...",
+      "category": "Select a category",
+      "icon": "e.g., BarChart"
+    },
+    "toasts": {
+      "created": "Asset Type Created",
+      "createdDescription": "\"{{name}}\" has been created.",
+      "updated": "Asset Type Updated",
+      "updatedDescription": "\"{{name}}\" has been updated.",
+      "createFailed": "Failed to Create",
+      "updateFailed": "Failed to Update"
+    }
+  }
+}

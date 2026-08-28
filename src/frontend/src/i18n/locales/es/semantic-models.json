@@ -1,0 +1,90 @@
+{
+  "rebuildGraph": "Reconstruir grafo",
+  "rebuildingGraph": "Reconstruyendo…",
+  "rebuildGraphTooltip": "Recargar ontologías, fuentes implícitas y objetos de la aplicación para que todo sea consultable.",
+  "title": "Navegador de conceptos",
+  "subtitle": "Gestiona glosarios de negocio y definiciones semánticas",
+  "newModel": "Nuevo Glosario",
+  "newTerm": "Nuevo Término",
+  "searchPlaceholder": "Buscar términos...",
+  "loading": "Cargando modelos semánticos...",
+  "linkedObjects": {
+    "title": "Entidades vinculadas",
+    "assign": "Asignar entidad",
+    "loading": "Cargando entidades vinculadas...",
+    "empty": "Ninguna entidad vinculada a este concepto.",
+    "removed": "Se eliminó el vínculo con \"{{label}}\".",
+    "removeFailed": "No se pudo eliminar el vínculo.",
+    "removeAria": "Eliminar entidad vinculada"
+  },
+  "relations": {
+    "title": "Relaciones",
+    "loading": "Cargando relaciones...",
+    "empty": "No se encontraron relaciones.",
+    "outgoingTooltip": "Este concepto → destino",
+    "incomingTooltip": "Origen → este concepto"
+  },
+  "neighborhood": {
+    "title": "Vecindario del concepto",
+    "loading": "Cargando vecindario...",
+    "empty": "Sin conceptos relacionados.",
+    "moreParents": "+{{count}} más",
+    "moreChildren": "+{{count}} más"
+  },
+  "filters": {
+    "allGlossaries": "Todos los Glosarios",
+    "allStatus": "Todos los Estados",
+    "bySource": "Filtrar por Fuente",
+    "all": "Todos",
+    "none": "Ninguno",
+    "groupBySource": "Agrupar por Fuente"
+  },
+  "table": {
+    "name": "Nombre",
+    "glossary": "Glosario",
+    "definition": "Definición",
+    "status": "Estado",
+    "updated": "Actualizado",
+    "actions": "Acciones"
+  },
+  "messages": {
+    "success": "Éxito",
+    "error": "Error",
+    "deleteConfirm": "¿Estás seguro de que quieres eliminar este término?",
+    "deleteSuccess": "Término eliminado exitosamente",
+    "deleteError": "Error al eliminar el término"
+  },
+  "status": {
+    "draft": "Borrador",
+    "pending": "Pendiente",
+    "in_review": "En revisión",
+    "under_review": "En revisión",
+    "active": "Activo",
+    "approved": "Aprobado",
+    "certified": "Certificado",
+    "deprecated": "Obsoleto",
+    "retired": "Retirado"
+  },
+  "details": {
+    "backToList": "Volver a Conceptos",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "notFound": "Concepto no encontrado",
+    "loading": "Cargando...",
+    "linkedAssets": "Activos Vinculados",
+    "synonyms": "Sinónimos",
+    "relatedTerms": "Términos Relacionados"
+  },
+  "form": {
+    "createTitle": "Crear Término",
+    "editTitle": "Editar Término",
+    "name": "Nombre",
+    "glossary": "Glosario",
+    "definition": "Definición",
+    "synonyms": "Sinónimos",
+    "status": "Estado",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  }
+}
+

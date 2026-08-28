@@ -1,0 +1,9 @@
+{
+  "home": "Home",
+  "groups": {
+    "discover": "Discover",
+    "create": "Create",
+    "govern": "Govern",
+    "observe": "Observe"
+  }
+}

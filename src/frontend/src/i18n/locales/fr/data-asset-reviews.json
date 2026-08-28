@@ -1,0 +1,79 @@
+{
+  "title": "Révisions d'Actifs de Données",
+  "subtitle": "Révisez et approuvez les actifs de données",
+  "newReview": "Nouvelle Révision",
+  "createRequest": "Créer une Nouvelle Demande de Révision d'Actif de Données",
+  "searchPlaceholder": "Rechercher des révisions...",
+  "loading": "Chargement des révisions...",
+  "noRequests": "Aucune demande de révision trouvée.",
+  "toast": {
+    "requestCreated": "Demande de révision « {{title}} » créée.",
+    "requestDeleted": "Demande de révision supprimée.",
+    "deleteError": "Échec de la suppression de la demande.",
+    "bulkDeleted": "{{count}} demande(s) supprimée(s).",
+    "bulkDeleteError": "Certaines demandes n'ont pas pu être supprimées.",
+    "titleUpdated": "Titre mis à jour.",
+    "idCopied": "ID copié dans le presse-papiers."
+  },
+  "form": {
+    "titleLabel": "Titre (Optionnel)",
+    "titlePlaceholder": "Laissez vide pour générer automatiquement depuis les actifs sélectionnés"
+  },
+  "actions": {
+    "editTitle": "Modifier le titre",
+    "copyId": "Copier l'ID"
+  },
+  "confirm": {
+    "deleteRequest": "Êtes-vous sûr de vouloir supprimer cette demande de révision ?",
+    "bulkDelete": "Êtes-vous sûr de vouloir supprimer {{count}} demande(s) sélectionnée(s) ?"
+  },
+  "filters": {
+    "allStatus": "Tous les Statuts",
+    "pending": "En Attente",
+    "approved": "Approuvé",
+    "rejected": "Rejeté"
+  },
+  "table": {
+    "title": "Titre",
+    "untitled": "(sans titre)",
+    "asset": "Actif",
+    "type": "Type",
+    "requester": "Demandeur",
+    "reviewer": "Réviseur",
+    "status": "Statut",
+    "assets": "Actifs",
+    "requested": "Demandé",
+    "created": "Créé",
+    "updated": "Mis à jour",
+    "actions": "Actions"
+  },
+  "messages": {
+    "success": "Succès",
+    "error": "Erreur",
+    "approveSuccess": "Révision approuvée avec succès",
+    "rejectSuccess": "Révision rejetée avec succès",
+    "approveError": "Échec de l'approbation de la révision",
+    "rejectError": "Échec du rejet de la révision"
+  },
+  "status": {
+    "pending": "En Attente",
+    "in_review": "En Révision",
+    "approved": "Approuvé",
+    "rejected": "Rejeté",
+    "cancelled": "Annulé"
+  },
+  "details": {
+    "backToList": "Retour aux Révisions",
+    "approve": "Approuver",
+    "reject": "Rejeter",
+    "cancel": "Annuler la Révision",
+    "notFound": "Révision non trouvée",
+    "loading": "Chargement...",
+    "asset": "Actif",
+    "requester": "Demandeur",
+    "reviewer": "Réviseur",
+    "reason": "Raison",
+    "comments": "Commentaires",
+    "addComment": "Ajouter un Commentaire"
+  }
+}

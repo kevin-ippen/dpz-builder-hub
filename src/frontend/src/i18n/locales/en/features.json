@@ -1,0 +1,78 @@
+{
+  "assets": {
+    "name": "Explore",
+    "description": "Browse all assets — filter by type, maturity, domain, and scope."
+  },
+  "search": {
+    "name": "Search",
+    "description": "Semantic search across all registered assets, skills, agents, and datasets."
+  },
+  "marketplace": {
+    "name": "Marketplace",
+    "description": "Installable components — skills, agents, MCP servers, templates."
+  },
+  "data-catalog": {
+    "name": "Catalog",
+    "description": "Unity Catalog assets — tables, views, endpoints with deep links."
+  },
+  "data-products": {
+    "name": "Submit",
+    "description": "Register an idea, POC, or production asset — starts at maturity=idea."
+  },
+  "my-products": {
+    "name": "My Portfolio",
+    "description": "Your assets across all maturity stages — ideas through production."
+  },
+  "my-requests": {
+    "name": "Demands",
+    "description": "Evidence of need — signals matched against existing assets."
+  },
+  "data-asset-reviews": {
+    "name": "Reviews",
+    "description": "Pending promotion requests and certification decisions."
+  },
+  "concepts": {
+    "name": "Maturity Gates",
+    "description": "Evidence requirements for each maturity level — configurable per type."
+  },
+  "data-contracts": {
+    "name": "Domains",
+    "description": "Domain-level health, ownership, and certification status."
+  },
+  "compliance": {
+    "name": "Portfolio",
+    "description": "Aggregate view — assets by maturity, type, domain, and health."
+  },
+  "estate-manager": {
+    "name": "Adoption",
+    "description": "Usage signals, engagement metrics, who is using what."
+  },
+  "catalog-commander": {
+    "name": "Cost & Quality",
+    "description": "Gateway token costs, MLflow eval scores, operational health per asset."
+  },
+  "data-domains": {
+    "name": "Domains",
+    "description": "Organize assets into logical domains."
+  },
+  "teams": {
+    "name": "Teams",
+    "description": "Manage teams and team members."
+  },
+  "projects": {
+    "name": "Projects",
+    "description": "Manage projects and assign teams."
+  },
+  "audit": {
+    "name": "Audit Trail",
+    "description": "View and filter application audit logs."
+  },
+  "settings": {
+    "name": "Settings",
+    "description": "Configure application settings and integrations."
+  },
+  "about": {
+    "name": "About",
+    "description": "Information about the application."
+  }
+}

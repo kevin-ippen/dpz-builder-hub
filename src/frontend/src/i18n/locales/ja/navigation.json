@@ -1,0 +1,9 @@
+{
+  "home": "ホーム",
+  "groups": {
+    "discover": "発見",
+    "build": "構築",
+    "govern": "管理",
+    "deploy": "デプロイ"
+  }
+}

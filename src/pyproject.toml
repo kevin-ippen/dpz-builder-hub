@@ -1,0 +1,161 @@
+[build-system]
+# hatchling capped <1.32: 1.32.0 enforces "readme must be within the project
+# directory" and rejects this package's ``readme = "../README.md"`` (the README
+# lives at the repo root, one level above src/). Uncapped, a fresh CI/dev env
+# pulls 1.32.x and every hatch-built job fails at metadata generation. Cap until
+# the readme is relocated into src/ or the field is made project-local.
+requires = ["hatchling>=1.21.0,<1.32", "hatch-requirements-txt~=0.4.1"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ontos"
+version = "1.0.2"
+description = "A Business Catalog for the Databricks Platform"
+readme = "../README.md"
+authors = [
+    { name="Databricks", email="ontos-support@databricks.com" }
+]
+license = {text = "Databricks License"}
+requires-python = ">=3.11,<3.13"
+dynamic = ["dependencies"]
+
+[tool.hatch.metadata.hooks.requirements_txt]
+files = ["requirements.txt"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/backend"]
+
+[tool.hatch.envs.default]
+python = "3.11"
+
+[tool.hatch.envs.dev]
+type = "virtual"
+builder = true
+python = "3.11"
+dependencies = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.8.0",
+    "pre-commit>=3.0.0",
+    "fpdf2>=2.8.0",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src",
+    "pyproject.toml",
+    "../README.md",
+]
+
+[tool.hatch.envs.dev.scripts]
+dev-frontend = "npm run dev:frontend"
+dev-backend = "uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8000"
+deploy-and-run = [
+  'databricks bundle deploy --var="catalog=app_data" --var="schema=app_ontos"',
+  "databricks bundle run app_ontos",
+]
+version-bump = "python3 scripts/bump_version.py {args}"
+version-show = "python3 scripts/bump_version.py"
+test = "pytest"
+test-cov = "pytest --cov=backend/src --cov-report=html --cov-report=term"
+test-unit = "pytest backend/src/tests/unit"
+test-integration = "pytest backend/src/tests/integration"
+test-cov-xml = "pytest --cov=backend/src --cov-report=xml --cov-report=term"
+lint = "ruff check backend"
+lint-fix = "ruff check backend --fix"
+format = "ruff format backend"
+format-check = "ruff format backend --check"
+pre-commit-run = "pre-commit run --all-files"
+pre-commit-setup = "pre-commit install"
+
+[tool.hatch.envs.dev.env-vars]
+PYTHONPATH = "./backend"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  ".",
+  "backend",
+  "backend/src"
+]
+# NOTE: backend/src/tests/unit/ holds the bulk of the unit tests. The legacy
+# backend/tests/ dir is kept for the few suites that haven't migrated yet.
+# importlib mode lets us collect both trees without test-module name collisions.
+testpaths = ["backend/src/tests/unit", "backend/tests"]
+addopts = [
+    "--cov=backend/src",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--import-mode=importlib",
+    "-v",
+]
+asyncio_mode = "strict"
+
+[tool.coverage.run]
+source = ["backend/src"]
+# Record repo-relative file paths (e.g. "backend/src/app.py") instead of paths
+# relative to the source root ("app.py"). Codecov's path fix in codecov.yml
+# (`backend/::src/backend/`) only matches paths that start with "backend/", so
+# without this the backend files never resolve against the repo tree and the
+# `backend` flag badge reported a diluted number instead of the real coverage.
+relative_files = true
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/migrations/*",
+    "*/alembic/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "backend/htmlcov"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["backend/src"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults (FastAPI depends)
+    "B904",   # raise without from (too noisy for existing code)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

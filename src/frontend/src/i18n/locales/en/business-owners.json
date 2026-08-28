@@ -1,0 +1,65 @@
+{
+  "title": "Business Owners",
+  "subtitle": "Ownership assignments tracking who is responsible for what.",
+  "addNew": "Assign Owner",
+  "editOwner": "Edit Assignment",
+  "removeOwner": "Remove Owner",
+  "table": {
+    "object": "Object",
+    "objectType": "Object Type",
+    "owner": "Owner",
+    "role": "Role",
+    "status": "Status",
+    "assignedAt": "Assigned",
+    "removedAt": "Removed",
+    "actions": "Actions"
+  },
+  "objectTypes": {
+    "data_product": "Data Product",
+    "data_contract": "Data Contract",
+    "dataset": "Dataset",
+    "data_domain": "Data Domain",
+    "business_term": "Business Term",
+    "policy": "Policy",
+    "asset": "Asset",
+    "tag": "Tag"
+  },
+  "statusLabels": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "permissions": {
+    "deniedView": "You do not have permission to view business owners.",
+    "deniedCreate": "You do not have permission to assign owners.",
+    "deniedEdit": "You do not have permission to edit owner assignments.",
+    "deniedDelete": "You do not have permission to remove owners.",
+    "permissionDenied": "Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "Error fetching business owners",
+    "errorRemoving": "Error removing business owner",
+    "removed": "Owner Removed",
+    "removedSuccess": "The ownership assignment was successfully removed.",
+    "errorLoadingData": "Error Loading Data"
+  },
+  "removeDialog": {
+    "title": "Remove Owner?",
+    "description": "This will deactivate the ownership assignment. The history will be preserved.",
+    "reasonLabel": "Reason (optional)",
+    "reasonPlaceholder": "Enter reason for removal...",
+    "cancel": "Cancel",
+    "remove": "Remove"
+  },
+  "emptyState": {
+    "title": "No ownership assignments yet",
+    "description": "Assign business owners to data products, contracts, and other objects."
+  },
+  "panel": {
+    "title": "Owners",
+    "currentOwners": "Current Owners",
+    "previousOwners": "Previous Owners",
+    "noOwners": "No owners assigned",
+    "assignOwner": "Assign Owner",
+    "history": "Show History"
+  }
+}

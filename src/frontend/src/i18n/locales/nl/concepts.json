@@ -1,0 +1,10 @@
+{
+  "title": "Concepten",
+  "nav": {
+    "collections": "Collecties",
+    "browser": "Concepten",
+    "search": "Zoeken",
+    "graph": "Grafiek",
+    "hierarchy": "Hiërarchie"
+  }
+}

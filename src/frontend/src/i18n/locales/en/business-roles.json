@@ -1,0 +1,75 @@
+{
+  "title": "Business Roles",
+  "subtitle": "Named roles that can be assigned to users as owners of various objects.",
+  "addNew": "Add Role",
+  "editRole": "Edit Role",
+  "deleteRole": "Delete Role",
+  "table": {
+    "name": "Name",
+    "description": "Description",
+    "category": "Category",
+    "status": "Status",
+    "system": "System",
+    "lastUpdated": "Last Updated",
+    "actions": "Actions"
+  },
+  "categories": {
+    "governance": "Governance",
+    "technical": "Technical",
+    "business": "Business",
+    "operational": "Operational"
+  },
+  "statuses": {
+    "active": "Active",
+    "deprecated": "Deprecated"
+  },
+  "permissions": {
+    "deniedView": "You do not have permission to view business roles.",
+    "deniedCreate": "You do not have permission to create business roles.",
+    "deniedEdit": "You do not have permission to edit business roles.",
+    "deniedDelete": "You do not have permission to delete business roles.",
+    "permissionDenied": "Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "Error fetching business roles",
+    "errorDeleting": "Error deleting business role",
+    "deleted": "Business Role Deleted",
+    "deletedSuccess": "The business role was successfully deleted.",
+    "errorLoadingData": "Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "Delete Business Role?",
+    "description": "This action cannot be undone. Existing owner assignments using this role may become orphaned.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "emptyState": {
+    "title": "No business roles defined yet",
+    "description": "Create your first business role (e.g., Data Owner, Domain Owner)."
+  },
+  "form": {
+    "createTitle": "Create Business Role",
+    "createDescription": "Add a new business role that can be assigned to users.",
+    "editTitle": "Edit Business Role",
+    "editDescription": "Update the details of this business role.",
+    "create": "Create",
+    "update": "Save Changes",
+    "noCategory": "No category",
+    "isApprover": "Workflow Approver",
+    "isApproverDescription": "Show this role in workflow approver and notification recipient dropdowns.",
+    "isApproverInUse": "Cannot disable — used in {{count}} workflow(s): {{workflows}}.",
+    "placeholders": {
+      "name": "e.g., Data Owner",
+      "description": "Describe the responsibilities of this role...",
+      "category": "Select a category"
+    },
+    "toasts": {
+      "created": "Business Role Created",
+      "createdDescription": "\"{{name}}\" has been created.",
+      "updated": "Business Role Updated",
+      "updatedDescription": "\"{{name}}\" has been updated.",
+      "createFailed": "Failed to Create",
+      "updateFailed": "Failed to Update"
+    }
+  }
+}

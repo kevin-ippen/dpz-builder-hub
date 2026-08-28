@@ -1,0 +1,175 @@
+roles:
+  - name: Admin
+    description: "Default role: Admin"
+    # assigned_groups may be injected from env APP_ADMIN_DEFAULT_GROUPS on first run
+    # feature_permissions omitted: Admin will be granted ADMIN for all features by default
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DATA_CURATION
+      - DISCOVERY
+    approval_privileges:
+      DOMAINS: true
+      CONTRACTS: true
+      PRODUCTS: true
+      BUSINESS_TERMS: true
+      ASSET_REVIEWS: true
+    deployment_policy:
+      allowed_catalogs:
+        - "*"  # Admin can deploy to any catalog
+      allowed_schemas: []  # Empty = any schema allowed
+      default_catalog: "main"
+      default_schema: "default"
+      require_approval: false  # Admin doesn't need approval
+      can_approve_deployments: true  # Admin can approve others' deployments
+
+  - name: Data Governance Officer
+    description: "Default role: Data Governance Officer"
+    # Default group binding. Matches the persona of the same id in
+    # src/backend/src/data/test_personas.yaml so runtime impersonation
+    # (TEST_USER_TOKEN flow) lands users in this role out of the box.
+    # Override in production via the Settings UI or a custom settings.yaml.
+    assigned_groups:
+      - data-governance-officers
+    feature_permissions:
+      data-domains: Admin
+      data-products: Admin
+      data-contracts: Admin
+      datasets: Admin
+      data-catalog: Admin
+      teams: Read-only
+      projects: Read-only
+      business-glossary: Admin
+      compliance: Admin
+      estate-manager: Admin
+      master-data: Admin
+      security-features: Admin
+      entitlements: Admin
+      entitlements-sync: Admin
+      data-asset-reviews: Admin
+      catalog-commander: Full
+      comments: Read/Write
+      process-workflows: Read-only  # View workflows; admins manage definitions
+      access-grants: Admin  # DGO approves access grants
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DISCOVERY
+    approval_privileges:
+      DOMAINS: true
+      CONTRACTS: true
+      PRODUCTS: true
+      BUSINESS_TERMS: true
+      ASSET_REVIEWS: true
+    deployment_policy:
+      allowed_catalogs:
+        - "*"  # Can deploy to any catalog
+      allowed_schemas: []
+      default_catalog: "main"
+      default_schema: "default"
+      require_approval: false
+      can_approve_deployments: true
+
+  - name: Data Steward
+    description: "Default role: Data Steward"
+    assigned_groups:
+      - data-stewards
+    feature_permissions:
+      data-domains: Read/Write
+      data-products: Read/Write
+      data-contracts: Read/Write
+      datasets: Read/Write
+      data-catalog: Read/Write
+      teams: Read-only
+      projects: Read-only
+      business-glossary: Read/Write
+      compliance: Read-only
+      data-asset-reviews: Read/Write
+      catalog-commander: Read-only
+      comments: Read/Write
+      process-workflows: Read-only  # View workflows; admins manage definitions
+      access-grants: Read/Write  # Can request grants on behalf of stewarded data
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DISCOVERY
+    approval_privileges:
+      CONTRACTS: true
+      PRODUCTS: true
+      ASSET_REVIEWS: true
+    deployment_policy:
+      allowed_catalogs:
+        - "main"
+        - "sandbox"
+        - "dev"
+      allowed_schemas: []
+      default_catalog: "main"
+      default_schema: "default"
+      require_approval: true  # Requires approval for production deployments
+      can_approve_deployments: false  # Cannot approve own requests
+
+  - name: Data Consumer
+    description: "Default role: Data Consumer"
+    assigned_groups:
+      - data-consumers
+    feature_permissions:
+      data-domains: Read-only
+      data-products: Read-only
+      data-contracts: Read-only
+      datasets: Read-only
+      data-catalog: Read-only
+      teams: Read-only
+      projects: Read-only
+      business-glossary: Read-only
+      catalog-commander: Read-only
+      comments: Read/Write
+      process-workflows: Read-only  # View workflows that affect own requests
+      access-grants: Read-only  # See own grants
+    home_sections:
+      - DISCOVERY
+
+  - name: Data Producer
+    description: "Default role: Data Producer"
+    assigned_groups:
+      - data-producers
+    feature_permissions:
+      data-domains: Read-only
+      data-products: Read/Write
+      data-contracts: Read/Write
+      datasets: Read/Write
+      data-catalog: Read-only
+      teams: Read/Write
+      projects: Read/Write
+      business-glossary: Read-only
+      catalog-commander: Read-only
+      comments: Read/Write
+      process-workflows: Read-only  # View workflows triggered by own products
+      access-grants: Read/Write  # Can request grants for own products
+    home_sections:
+      - DATA_CURATION
+      - DISCOVERY
+    deployment_policy:
+      allowed_catalogs:
+        - "sandbox"
+        - "dev"
+        - "staging"
+      allowed_schemas: []
+      default_catalog: "sandbox"
+      default_schema: "default"
+      require_approval: true  # Requires approval
+      can_approve_deployments: false
+
+  - name: Security Officer
+    description: "Default role: Security Officer"
+    assigned_groups:
+      - security-officers
+    feature_permissions:
+      security-features: Admin
+      entitlements: Admin
+      entitlements-sync: Admin
+      compliance: Read/Write
+      data-asset-reviews: Read-only
+      comments: Read/Write
+      process-workflows: Read-only  # View workflows; admins manage definitions
+      access-grants: Admin  # Security Officer approves access grants
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DISCOVERY
+

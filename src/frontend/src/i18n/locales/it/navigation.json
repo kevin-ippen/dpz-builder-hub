@@ -1,0 +1,9 @@
+{
+  "home": "Home",
+  "groups": {
+    "discover": "Scopri",
+    "build": "Costruisci",
+    "govern": "Governa",
+    "deploy": "Distribuisci"
+  }
+}

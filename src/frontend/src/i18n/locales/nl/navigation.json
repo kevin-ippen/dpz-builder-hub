@@ -1,0 +1,9 @@
+{
+  "home": "Home",
+  "groups": {
+    "discover": "Ontdekken",
+    "build": "Bouwen",
+    "govern": "Besturen",
+    "deploy": "Uitrollen"
+  }
+}

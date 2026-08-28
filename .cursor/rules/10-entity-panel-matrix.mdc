@@ -1,0 +1,229 @@
+---
+name: Entity & Asset Type Panel Matrix
+priority: 70
+scope:
+  globs:
+    - "src/frontend/src/views/**"
+    - "src/frontend/src/components/**"
+    - "src/backend/src/routes/**"
+    - "src/backend/src/controller/**"
+    - "src/backend/src/models/**"
+    - "src/backend/src/db_models/**"
+---
+
+# Entity & Asset Type – Polymorphic Panel Matrix
+
+This file is the **single source of truth** for which cross-cutting (polymorphic) panels
+and backend tables apply to each entity and asset type. Use it to decide whether a UI
+panel should be rendered, and whether a backend route should accept a given `entity_type`.
+
+> **Convention:** when adding a new entity/asset type, update this matrix first.
+
+---
+
+## 1. Polymorphic Backend Tables
+
+These tables use an `entity_type` + `entity_id` pattern to link to any entity.
+
+| Table | Purpose |
+|---|---|
+| `cost_items` | Monetary cost tracking (infra, HR, storage, maintenance) |
+| `quality_items` | Data quality measurements (ODCS dimensions, multi-source, time-tracked) |
+| `comments` | User comments with audience scoping |
+| `comments` (ratings) | Star ratings + optional review text |
+| `entity_relationships` | Typed relationships between any two entities |
+| `entity_subscriptions` | User subscriptions / notifications |
+| `entity_tag_associations` | Tag assignments |
+| `entity_domain_associations` | Data domain assignments — multi-domain with one `is_primary` per entity (`entity_type` ∈ {`team`, `data_contract`, `data_product`, `asset`}). Primary feeds single-value integrations (ODCS/ODPS `domain`, UC `data_domain` tag); additional domains ride extension fields and any-of discovery. See `docs/prds/prd-multi-domain-assignment.md`. |
+| `entity_semantic_links` | Links to ontology concepts/properties (`entity_type` ∈ {`data_domain`, `data_product`, `data_contract`, `data_contract_schema`, `data_contract_property`, `asset`, `uc_catalog`, `uc_schema`, `uc_table`, `uc_column`, `dataset` _(legacy)_}) |
+| `rich_text_metadata` | Rich-text notes |
+| `link_metadata` | External link bookmarks |
+| `document_metadata` | Uploaded documents |
+| `metadata_attachments` | Shared-metadata attachments |
+| `entity_change_log` | Audit trail of create/update/delete/status changes |
+| `access_grants` / `access_grant_requests` | Fine-grained access control |
+| `agreements` / `agreement_wizard_sessions` | Approval workflows |
+| `business_owners` | Owner assignments |
+
+---
+
+## 2. Reusable Frontend Panels
+
+| Panel Component | File | Key Props |
+|---|---|---|
+| `EntityCostsPanel` | `components/costs/entity-costs-panel.tsx` | `entityType`, `entityId` |
+| `EntityQualityPanel` | `components/quality/entity-quality-panel.tsx` | `entityType`, `entityId`, `productAggregation?` |
+| `EntityMetadataPanel` | `components/metadata/entity-metadata-panel.tsx` | `entityType`, `entityId` |
+| `OwnershipPanel` | `components/common/ownership-panel.tsx` | `objectType`, `objectId` |
+| `EntityTreePanel` | `components/common/entity-tree-panel.tsx` | `entityType`, `entityId` |
+| `CommentSidebar` | `components/comments/comment-sidebar.tsx` | `entityType`, `entityId` |
+| `RatingPanel` | `components/ratings/rating-panel.tsx` | `entityType`, `entityId` |
+| `AccessGrantsPanel` | `components/access/access-grants-panel.tsx` | `entityType`, `entityId` |
+| `BusinessLineageGraph` | `components/common/business-lineage-graph.tsx` | `entityType`, `entityId` |
+| `LineageEditor` | `components/common/lineage-editor.tsx` | `entityType`, `entityId` |
+| `ImpactAnalysisPanel` | `components/common/impact-analysis-panel.tsx` | `entityType`, `entityId` |
+| `VersionHistoryPanel` | `components/data-contracts/version-history-panel.tsx` | `contractId` (DataContract only) |
+| `NodeLinksPanel` | `components/knowledge/node-links-panel.tsx` | concept props (Concept only) |
+
+---
+
+## 3. Matrix – Tier 1: Dedicated Entities
+
+Dedicated entities have their own DB tables and detail views.
+
+Legend: **Y** = yes, show/support | **—** = no, hide/skip | **Σ** = show summary/aggregate only (no direct items)
+
+| Panel / Table | DataDomain | DataProduct | DataContract | CompliancePolicy | Concept | Collection |
+|---|---|---|---|---|---|---|
+| **Costs** | Σ | Y | Y | — | — | — |
+| **Quality** | Σ | Y | Y | — | — | — |
+| **Comments** | Y | Y | Y | Y | — | — |
+| **Ratings** | — | Y | Y | — | — | — |
+| **Relationships** | Y | Y | Y | — | — | — |
+| **Subscriptions** | — | Y | Y | — | — | — |
+| **Tags** | — | Y | Y | — | — | — |
+| **Semantic Links** | Y | Y | Y | — | — | — |
+| **Metadata (rich/link/doc)** | Y | Y | Y | Y | Y | Y |
+| **Change Log** | — | Y | Y | — | — | — |
+| **Access Grants** | — | Y | — | — | — | — |
+| **Agreements / Approvals** | — | Y | Y | — | — | — |
+| **Ownership** | Y | Y | Y | — | Y | — |
+| **Lineage** | — | Y | Y | — | — | — |
+| **Impact Analysis** | — | — | — | Y | — | — |
+| **Version History** | — | — | Y | — | — | — |
+
+### Notes – Tier 1
+
+- **DataDomain costs:** domains don't carry direct cost items. The UI may show a
+  **summary** (Σ) aggregated from child products/contracts, but should never offer
+  "Add cost item" on a domain.
+- **DataDomain quality:** same as costs – aggregate-only from child products.
+- **DataProduct quality:** uses `productAggregation` prop to auto-roll-up scores
+  from child contracts. Also accepts direct product-level measurements.
+- **Team, Project, BusinessRole, ProcessWorkflow, GenieSpace, SemanticModel, MdmConfig,
+  AssetReview** currently have **no** polymorphic panel integration. If panels are
+  added later, update this matrix.
+
+---
+
+## 4. Matrix – Tier 2: Asset-Backed Entities
+
+Asset-backed entities live in the `assets` table, typed by `asset_types`. They all
+share `asset-detail.tsx`. Panels must be **conditionally rendered** based on
+`asset.asset_type_name`.
+
+Legend: **Y** = show | **—** = hide | **Σ** = summary only
+
+| Panel / Table | Catalog | Schema | Table | View | Column | Dataset | Dashboard | Notebook | ML Model | API Endpoint | Stream | Policy | Business Term | Logical Entity | Logical Attribute | Delivery Channel | System |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Costs** | — | — | - | - | — | - | - | — | - | — | - | — | — | — | — | — | - |
+| **Quality** | — | — | Y | Y | — | Y | — | — | Y | — | — | — | — | — | — | — | — |
+| **Comments** | — | — | Y | Y | — | Y | Y | Y | Y | Y | - | — | Y | — | — | — | — |
+| **Ratings** | — | — | — | — | — | Y | Y | — | Y | — | — | — | — | — | — | — | — |
+| **Relationships** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| **Subscriptions** | — | — | — | — | — | Y | — | — | — | — | — | — | — | — | — | — | — |
+| **Tags** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | — | — | — | Y |
+| **Semantic Links** | — | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | Y |
+| **Metadata (rich/link/doc)** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
+| **Change Log** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
+| **Access Grants** | — | — | Y | Y | — | Y | — | — | — | — | — | — | — | — | — | — | — |
+| **Ownership** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
+| **Lineage** | — | — | Y | Y | — | Y | — | — | Y | — | Y | — | — | — | — | — | — |
+| **Impact Analysis** | — | — | — | — | — | — | — | — | — | — | — | Y | Y | Y | — | — | — |
+
+### Notes – Tier 2
+
+- **Catalog / Schema**: Structural containers in the platform hierarchy
+  (System > Catalog > Schema > Table). They carry relationships, tags, metadata,
+  ownership, and change log, but not costs, quality, ratings, or lineage.
+- **Column / Logical Attribute / Delivery Channel**: These are leaf-level or
+  structural entities. They need relationships (to parent table, to logical model)
+  and change log, but no costs, comments, ratings, ownership, or lineage.
+- **Policy / Business Term**: Governance artifacts. They benefit from impact analysis
+  (what entities reference them?) but not from costs or ratings.
+- **Logical Entity**: A conceptual model element. Impact analysis makes sense
+  (which physical tables implement it?), but not costs, comments, or ratings.
+- **Table / View**: Physical data assets. They carry costs (compute, storage), can
+  have lineage, comments, tags, ownership, and access grants. They don't carry
+  ratings (rate the DataProduct instead).
+- **Dataset**: An output-port implementation. Treated like a first-class data asset
+  with most panels enabled.
+- **Dashboard / ML Model**: Consumable outputs. Ratings and costs apply.
+- **Notebook / API Endpoint**: Development artifacts. Comments and tags yes,
+  ratings and costs generally no (cost is tracked at the product level).
+- **Semantic Links (Tier 2)**: All Tier 2 asset-backed entities are addressable
+  via `entity_type='asset'` with `entity_id = AssetDb.id` (UUID). The single
+  `asset` polymorphic type covers Table, View, Dataset, Dashboard, Notebook,
+  ML Model, Column, Logical Attribute, Business Term, etc. — the IRI itself
+  indicates whether the link points at a class (rdfs:Class) or property
+  (rdf:Property). Catalog/Schema are excluded because they are platform
+  containers and instead use the dedicated `uc_catalog` / `uc_schema`
+  entity types when raw UC objects need linking. Delivery Channel is
+  excluded — it has no semantic surface today.
+
+---
+
+## 5. Implementation Guidance
+
+### Frontend – `asset-detail.tsx`
+
+Use the asset type name to conditionally render panels:
+
+```tsx
+const COST_ELIGIBLE_TYPES = new Set([
+  'Table', 'View', 'Dataset', 'Dashboard', 'ML Model', 'Stream', 'System',
+]);
+const QUALITY_ELIGIBLE_TYPES = new Set([
+  'Table', 'View', 'Dataset', 'ML Model',
+]);
+const COMMENT_ELIGIBLE_TYPES = new Set([
+  'Table', 'View', 'Dataset', 'Dashboard', 'Notebook',
+  'ML Model', 'API Endpoint', 'Stream',
+]);
+const RATING_ELIGIBLE_TYPES = new Set([
+  'Dataset', 'Dashboard', 'ML Model',
+]);
+const LINEAGE_ELIGIBLE_TYPES = new Set([
+  'Table', 'View', 'Dataset', 'ML Model', 'Stream',
+]);
+const IMPACT_ELIGIBLE_TYPES = new Set([
+  'Policy', 'Business Term', 'Logical Entity',
+]);
+const OWNERSHIP_ELIGIBLE_TYPES = new Set([
+  'Table', 'View', 'Dataset', 'Dashboard', 'Notebook',
+  'ML Model', 'API Endpoint', 'Stream', 'Policy',
+  'Business Term', 'Logical Entity', 'System',
+]);
+// Semantic Links are exposed on all asset-backed entities except containers
+// (Catalog/Schema) and Delivery Channel. The asset detail view always renders
+// the panel — empty state is handled gracefully — so an explicit allow-set
+// is only needed if you ever decide to hide the panel for specific types.
+const SEMANTIC_LINK_INELIGIBLE_TYPES = new Set([
+  'Catalog', 'Schema', 'Delivery Channel',
+]);
+```
+
+Then guard each panel:
+
+```tsx
+{COST_ELIGIBLE_TYPES.has(entityType) && (
+  <EntityCostsPanel entityId={assetId} entityType="asset" />
+)}
+```
+
+### Backend – Pydantic models
+
+Update `entity_type` validators to accept the expanded set where appropriate.
+For example, `CostItemBase.entity_type` currently only allows
+`data_domain|data_product|data_contract` — extend it to include `asset` when
+the cost tracking is expanded.
+
+### Adding a New Entity or Asset Type
+
+1. Add the type to the ontology (`ontos-ontology.ttl`) or as a dedicated model.
+2. **Update this matrix** with Y/—/Σ for every panel row.
+3. If asset-backed, add the type name to the appropriate `*_ELIGIBLE_TYPES` sets
+   in `asset-detail.tsx`.
+4. If dedicated, wire panels in the new detail view according to the matrix.
+5. Update backend Pydantic validators if the type needs to be accepted by
+   polymorphic routes (costs, comments, etc.).

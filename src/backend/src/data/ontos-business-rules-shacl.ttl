@@ -1,0 +1,222 @@
+# =============================================================================
+# Ontos Business Rules - SHACL Shapes
+# =============================================================================
+# SHACL shapes expressing business rules (number ranges, patterns, cardinality)
+# for properties aligned with the demo ontology (http://demo.ontos.app/glossary#).
+# Can be used for validation of data contract schemas or instance data.
+# =============================================================================
+
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix dc:   <http://purl.org/dc/terms/> .
+
+# Ontos business rule shapes namespace
+@prefix rules: <http://ontos.app/shapes/business-rules#> .
+
+# Demo glossary concepts (for targeting shapes)
+@prefix demo: <http://demo.ontos.app/glossary#> .
+
+# =============================================================================
+# Ontology / Graph Header
+# =============================================================================
+
+rules: a owl:Ontology ;
+    rdfs:label "Ontos Business Rules (SHACL)"@en ;
+    rdfs:comment "SHACL shapes expressing business rules: number ranges, string patterns, and cardinality for governance and validation." ;
+    owl:versionInfo "1.0.0" ;
+    dc:created "2025-02-12" ;
+    dc:creator "Ontos Data Governance Platform" .
+
+# =============================================================================
+# Numeric range shapes (number ranges for specific property concepts)
+# =============================================================================
+
+# Quantity: non-negative integer (e.g. inventory quantity, count)
+rules:QuantityShape a sh:NodeShape ;
+    rdfs:label "Quantity value constraint" ;
+    rdfs:comment "Business rule: quantity must be a non-negative integer." ;
+    sh:targetClass demo:Quantity ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path rdf:value ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive 999999999 ;
+        sh:description "Quantity must be >= 0 and <= 999,999,999"
+    ] .
+
+# Amount: non-negative decimal (e.g. monetary amount, price)
+rules:AmountShape a sh:NodeShape ;
+    rdfs:label "Amount value constraint" ;
+    rdfs:comment "Business rule: amount must be non-negative (e.g. price, payment)." ;
+    sh:targetClass demo:Amount ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path rdf:value ;
+        sh:datatype xsd:decimal ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive "999999999.99"^^xsd:decimal ;
+        sh:description "Amount must be >= 0"
+    ] .
+
+# Percentage: 0 to 100 (inclusive)
+rules:PercentageShape a sh:NodeShape ;
+    rdfs:label "Percentage value constraint" ;
+    rdfs:comment "Business rule: percentage must be between 0 and 100." ;
+    sh:targetClass demo:Percentage ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path rdf:value ;
+        sh:datatype xsd:decimal ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive 100 ;
+        sh:description "Percentage must be in range [0, 100]"
+    ] .
+
+# Year: reasonable range for date/year values (e.g. birth year, fiscal year)
+rules:YearRangeShape a sh:PropertyShape ;
+    rdfs:label "Year value constraint" ;
+    rdfs:comment "Business rule: year must be in valid range (1900-2100)." ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 1900 ;
+    sh:maxInclusive 2100 ;
+    sh:description "Year must be in range [1900, 2100]" .
+
+# Score or rating: 0 to 100 or 1 to 5
+rules:ScoreShape a sh:NodeShape ;
+    rdfs:label "Score value constraint" ;
+    rdfs:comment "Business rule: score in range 0-100 or 1-5." ;
+    sh:targetClass demo:Score ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path rdf:value ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:maxInclusive 100 ;
+        sh:description "Score must be in range [0, 100]"
+    ] .
+
+# =============================================================================
+# Property-level shapes (constraints on specific logical properties)
+# =============================================================================
+
+# Country code: exactly 2 characters (ISO 3166-1 alpha-2)
+rules:CountryCodePropertyShape a sh:PropertyShape ;
+    rdfs:label "Country code format" ;
+    rdfs:comment "Business rule: country code must be 2-letter ISO 3166-1 alpha-2." ;
+    sh:path demo:CountryCode ;
+    sh:datatype xsd:string ;
+    sh:minLength 2 ;
+    sh:maxLength 2 ;
+    sh:pattern "^[A-Z]{2}$" ;
+    sh:description "Must be 2 uppercase letters (e.g. US, DE)" .
+
+# Email address: basic format
+rules:EmailAddressPropertyShape a sh:PropertyShape ;
+    rdfs:label "Email address format" ;
+    rdfs:comment "Business rule: email must match common format." ;
+    sh:path demo:EmailAddress ;
+    sh:datatype xsd:string ;
+    sh:minLength 5 ;
+    sh:maxLength 320 ;
+    sh:pattern "^[^@]+@[^@]+\\.[^@]+$" ;
+    sh:description "Must be a valid email format" .
+
+# Phone number: E.164 style (digits, optional + prefix)
+rules:PhoneNumberPropertyShape a sh:PropertyShape ;
+    rdfs:label "Phone number format" ;
+    rdfs:comment "Business rule: phone number E.164 style, 10-15 digits." ;
+    sh:path demo:PhoneNumber ;
+    sh:datatype xsd:string ;
+    sh:minLength 10 ;
+    sh:maxLength 20 ;
+    sh:pattern "^\\+?[0-9]{10,15}$" ;
+    sh:description "Must be 10-15 digits, optional leading +" .
+
+# Unique identifier: non-empty string, max length
+rules:UniqueIdentifierPropertyShape a sh:PropertyShape ;
+    rdfs:label "Unique identifier format" ;
+    rdfs:comment "Business rule: identifier non-empty, bounded length." ;
+    sh:path demo:UniqueIdentifier ;
+    sh:datatype xsd:string ;
+    sh:minLength 1 ;
+    sh:maxLength 256 ;
+    sh:description "Must be non-empty, max 256 characters" .
+
+# =============================================================================
+# Cardinality and optional numeric ranges (standalone property shapes)
+# =============================================================================
+
+# Quantity range: reusable constraint for any property representing quantity
+rules:QuantityRangeShape a sh:PropertyShape ;
+    rdfs:label "Quantity range (0 to max)" ;
+    rdfs:comment "Reusable: value must be non-negative integer in allowed range." ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+    sh:maxInclusive 999999999 .
+
+# Percentage range: reusable 0-100
+rules:PercentageRangeShape a sh:PropertyShape ;
+    rdfs:label "Percentage range (0-100)" ;
+    rdfs:comment "Reusable: value must be between 0 and 100." ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0 ;
+    sh:maxInclusive 100 .
+
+# Amount non-negative: reusable
+rules:AmountNonNegativeShape a sh:PropertyShape ;
+    rdfs:label "Amount non-negative" ;
+    rdfs:comment "Reusable: monetary or numeric amount must be >= 0." ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0 .
+
+# =============================================================================
+# Node shapes for contract/schema context (target by class)
+# =============================================================================
+
+# Customer profile: at least one identifier, email format if present
+rules:CustomerProfileNodeShape a sh:NodeShape ;
+    rdfs:label "Customer profile record" ;
+    rdfs:comment "Business rules for a customer profile node." ;
+    sh:targetClass demo:CustomerProfile ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path demo:CustomerId ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:description "Exactly one customer identifier required"
+    ] ;
+    sh:property [
+        a sh:PropertyShape ;
+        sh:path demo:EmailAddress ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:minLength 5 ;
+        sh:maxLength 320 ;
+        sh:pattern "^[^@]+@[^@]+\\.[^@]+$"
+    ] .
+
+# =============================================================================
+# Auxiliary vocabulary (if not in demo ontology)
+# =============================================================================
+
+# Concepts referenced by shapes but that may not exist in demo - define as OWL classes
+# so the graph is self-contained and shapes still parse.
+demo:Quantity a owl:Class ;
+    rdfs:label "Quantity" ;
+    rdfs:comment "Numeric quantity (e.g. inventory count); must be non-negative integer." .
+
+demo:Amount a owl:Class ;
+    rdfs:label "Amount" ;
+    rdfs:comment "Monetary or numeric amount; must be non-negative." .
+
+demo:Percentage a owl:Class ;
+    rdfs:label "Percentage" ;
+    rdfs:comment "Percentage value; must be in range 0-100." .
+
+demo:Score a owl:Class ;
+    rdfs:label "Score" ;
+    rdfs:comment "Score or rating value; typically 0-100 or 1-5." .

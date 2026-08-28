@@ -1,0 +1,92 @@
+{
+  "rebuildGraph": "Grafiek opnieuw opbouwen",
+  "rebuildingGraph": "Bezig met opbouwen…",
+  "rebuildGraphTooltip": "Ontologieën, impliciete bronnen en app-objecten opnieuw laden zodat alles doorzoekbaar is.",
+  "title": "Conceptbrowser",
+  "subtitle": "Beheer business glossaries en semantische definities",
+  "newModel": "Nieuwe Glossary",
+  "newTerm": "Nieuwe Term",
+  "searchPlaceholder": "Zoek termen...",
+  "loading": "Semantische modellen laden...",
+  "linkedObjects": {
+    "title": "Gekoppelde entiteiten",
+    "assign": "Entiteit koppelen",
+    "loading": "Gekoppelde entiteiten laden...",
+    "empty": "Geen entiteiten gekoppeld aan dit concept.",
+    "removed": "Koppeling naar \"{{label}}\" verwijderd.",
+    "removeFailed": "Kan koppeling niet verwijderen.",
+    "removeAria": "Gekoppelde entiteit verwijderen"
+  },
+  "relations": {
+    "title": "Relaties",
+    "loading": "Relaties laden...",
+    "empty": "Geen relaties gevonden.",
+    "outgoingTooltip": "Dit concept → doel",
+    "incomingTooltip": "Bron → dit concept"
+  },
+  "neighborhood": {
+    "title": "Concept-omgeving",
+    "loading": "Omgeving laden...",
+    "empty": "Geen gerelateerde concepten.",
+    "moreParents": "+{{count}} meer",
+    "moreChildren": "+{{count}} meer"
+  },
+  "filters": {
+    "allGlossaries": "Alle Glossaries",
+    "allStatus": "Alle Status",
+    "bySource": "Filter op Bron",
+    "all": "Alles",
+    "none": "Geen",
+    "groupBySource": "Groepeer op Bron",
+    "showProperties": "Toon Eigenschappen",
+    "groupByDomain": "Groepeer op Domein"
+  },
+  "table": {
+    "name": "Naam",
+    "glossary": "Glossary",
+    "definition": "Definitie",
+    "status": "Status",
+    "updated": "Bijgewerkt",
+    "actions": "Acties"
+  },
+  "messages": {
+    "success": "Succes",
+    "error": "Fout",
+    "deleteConfirm": "Weet je zeker dat je deze term wilt verwijderen?",
+    "deleteSuccess": "Term succesvol verwijderd",
+    "deleteError": "Kon term niet verwijderen"
+  },
+  "status": {
+    "draft": "Concept",
+    "pending": "In Afwachting",
+    "in_review": "In Beoordeling",
+    "under_review": "In Beoordeling",
+    "active": "Actief",
+    "approved": "Goedgekeurd",
+    "certified": "Gecertificeerd",
+    "deprecated": "Verouderd",
+    "retired": "Buiten Gebruik"
+  },
+  "details": {
+    "backToList": "Terug naar Concepten",
+    "edit": "Bewerken",
+    "delete": "Verwijderen",
+    "notFound": "Concept niet gevonden",
+    "loading": "Laden...",
+    "linkedAssets": "Gekoppelde Assets",
+    "synonyms": "Synoniemen",
+    "relatedTerms": "Gerelateerde Termen"
+  },
+  "form": {
+    "createTitle": "Term Aanmaken",
+    "editTitle": "Term Bewerken",
+    "name": "Naam",
+    "glossary": "Glossary",
+    "definition": "Definitie",
+    "synonyms": "Synoniemen",
+    "status": "Status",
+    "cancel": "Annuleren",
+    "save": "Opslaan"
+  }
+}
+

@@ -1,0 +1,43 @@
+---
+name: Testing and Deployment
+priority: 65
+scope:
+  globs: ["**/*"]
+---
+
+### Testing and Deployment
+
+**Local development**
+
+- Backend (FastAPI/Uvicorn) runs on **port 8000**. Frontend (Vite) runs on **port 3000**.
+- Both servers run in dev mode with auto-reload. **NEVER restart server processes** — file changes auto-reload.
+- Backend logs: `/tmp/backend.log`. Frontend logs: `/tmp/frontend.log`. Read them as needed.
+- Always run Python snippets via `hatch -e dev run ...` to pick up the project's environment.
+- Input validation: Pydantic on the backend, Zod / `react-hook-form` on the frontend.
+
+**Multiple worktrees (parallel LLM sessions)**
+
+- The user's primary worktree owns ports **8000/3000** — **NEVER restart those** and never bind your own servers to them.
+- When working in a *separate* worktree, start your **own** frontend + backend on **distinct ports** so you don't collide with (or accidentally proxy into) another branch's servers. Worktrees can share the same local `app_ontos` PostgreSQL DB; only the HTTP ports must differ.
+- Frontend port + proxy target are env-var driven; the backend port is passed straight to `uvicorn` (the `dev-backend` hatch script is hard-coded to 8000, so a second worktree runs uvicorn directly):
+  - `VITE_PORT` (default `3000`) — Vite dev server.
+  - `VITE_PROXY_TARGET` (default `http://localhost:8000`) — must point at *your* backend port.
+- Example second pair (backend 8100 / frontend 3100):
+  - Backend (from `src/`): `hatch -e dev run uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8100`
+  - Frontend (from `src/frontend/`): `VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 yarn dev:frontend`
+- Full contributor-facing docs: `CONTRIBUTING.md` → "Running Multiple Worktrees Side-by-Side".
+
+**Testing**
+
+- Backend: `pytest` (tests under `src/backend/src/tests/` and top-level `e2e/`).
+- Frontend: Vitest + Testing Library (`src/frontend/tests/`, `src/frontend/src/**/*.test.ts(x)`).
+- E2E / UI verification via the **Playwright MCP**. Common tools:
+  - `mcp__playwright__browser_navigate` — open a page
+  - `mcp__playwright__browser_snapshot` — accessibility snapshot for assertions
+  - `mcp__playwright__browser_click`, `..._type`, `..._fill_form` — interact with the UI
+  - `mcp__playwright__browser_take_screenshot` — capture screenshots for debugging/docs
+  - Useful for end-to-end flows like create data product → assign permissions → verify access.
+
+**Deployment**
+
+- Deployed as a Databricks App via `databricks bundle deploy`. App config: `src/app.yaml`. Bundle config: `src/databricks.yaml`.

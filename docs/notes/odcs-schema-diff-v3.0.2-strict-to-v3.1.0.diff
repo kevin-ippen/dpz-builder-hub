@@ -1,0 +1,1072 @@
+--- /Users/lars.george/Documents/dev/dbapp/ucapp/src/backend/src/schemas/odcs-json-schema-v3.0.2-strict.json	2025-09-14 17:46:01
++++ /tmp/odcs-json-schema-v3.1.0.json	2026-02-10 22:40:00
+@@ -16,9 +16,9 @@
+     },
+     "apiVersion": {
+       "type": "string",
+-      "default": "v3.0.2",
+-      "description": "Version of the standard used to build data contract. Default value is v3.0.2.",
+-      "enum": ["v3.0.2","v3.0.1", "v3.0.0", "v2.2.2", "v2.2.1", "v2.2.0"]
++      "default": "v3.1.0",
++      "description": "Version of the standard used to build data contract. Default value is v3.1.0.",
++      "enum": ["v3.1.0", "v3.0.2", "v3.0.1", "v3.0.0", "v2.2.2", "v2.2.1", "v2.2.0"]
+     },
+     "id": {
+       "type": "string",
+@@ -96,10 +96,20 @@
+       "$ref": "#/$defs/Pricing"
+     },
+     "team": {
+-      "type": "array",
+-      "items": {
+-        "$ref": "#/$defs/Team"
+-      }
++      "oneOf": [
++        {
++          "$ref": "#/$defs/Team",
++          "description": "Team information object with members array (v3.1.0+)."
++        },
++        {
++          "type": "array",
++          "description": "DEPRECATED: Array of team members. Use the Team object structure instead. This array format is maintained for backward compatibility with v3.0.2 and earlier versions and will be removed in ODCS 4.0.",
++          "deprecated": true,
++          "items": {
++            "$ref": "#/$defs/TeamMember"
++          }
++        }
++      ]
+     },
+     "roles": {
+       "type": "array",
+@@ -110,7 +120,8 @@
+     },
+     "slaDefaultElement": {
+       "type": "string",
+-      "description": "Element (using the element path notation) to do the checks on."
++      "description": "DEPRECATED SINCE 3.1. WILL BE REMOVED IN ODCS 4.0. Element (using the element path notation) to do the checks on.",
++      "deprecated": true
+     },
+     "slaProperties": {
+       "type": "array",
+@@ -135,10 +146,28 @@
+   "additionalProperties": false,
+   "unevaluatedProperties": false,
+   "$defs": {
++    "ShorthandReference": {
++      "type": "string",
++      "description": "Shorthand notation using name fields (table_name.column_name)",
++      "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"
++    },
++    "FullyQualifiedReference": {
++      "type": "string",
++      "description": "Fully qualified notation using id fields (section/id/properties/id), optionally prefixed with external file reference",
++      "pattern": "^(?:(?:https?:\\/\\/)?[A-Za-z0-9._\\-\\/]+\\.yaml#)?\\/?[A-Za-z_][A-Za-z0-9_]*\\/[A-Za-z0-9_-]+(?:\\/[A-Za-z_][A-Za-z0-9_]*\\/[A-Za-z0-9_-]+)*$"
++    },
++    "StableId": {
++      "type": "string",
++      "description": "Stable technical identifier for references. Must be unique within its containing array. Cannot contain special characters ('-', '_' allowed).",
++      "pattern": "^[A-Za-z0-9_-]+$"
++    },
+     "Server": {
+       "type": "object",
+       "description": "Data source details of where data is physically stored.",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "server": {
+           "type": "string",
+           "description": "Identifier of the server."
+@@ -148,9 +177,9 @@
+           "description": "Type of the server.",
+           "enum": [
+             "api", "athena", "azure", "bigquery", "clickhouse", "databricks", "denodo", "dremio",
+-            "duckdb", "glue", "cloudsql", "db2", "informix", "kafka", "kinesis", "local",
++            "duckdb", "glue", "cloudsql", "db2", "hive", "impala", "informix", "kafka", "kinesis", "local",
+             "mysql", "oracle", "postgresql", "postgres", "presto", "pubsub",
+-            "redshift", "s3", "sftp", "snowflake", "sqlserver", "synapse", "trino", "vertica", "custom"
++            "redshift", "s3", "sftp", "snowflake", "sqlserver", "synapse", "trino", "vertica", "zen", "custom"
+           ]
+         },
+         "description": {
+@@ -334,6 +363,32 @@
+           "if": {
+             "properties": {
+               "type": {
++                "const": "hive"
++              }
++            },
++            "required": ["type"]
++          },
++          "then": {
++            "$ref": "#/$defs/ServerSource/HiveServer"
++          }
++        },
++        {
++          "if": {
++            "properties": {
++              "type": {
++                "const": "impala"
++              }
++            },
++            "required": ["type"]
++          },
++          "then": {
++            "$ref": "#/$defs/ServerSource/ImpalaServer"
++          }
++        },
++        {
++          "if": {
++            "properties": {
++              "type": {
+                 "const": "informix"
+               }
+             },
+@@ -343,11 +398,23 @@
+             "$ref": "#/$defs/ServerSource/InformixServer"
+           }
+         },
+-
+         {
+           "if": {
+             "properties": {
+               "type": {
++                "const": "zen"
++              }
++            },
++            "required": ["type"]
++          },
++          "then": {
++            "$ref": "#/$defs/ServerSource/ZenServer"
++          }
++        },
++        {
++          "if": {
++            "properties": {
++              "type": {
+                 "const": "custom"
+               }
+             },
+@@ -647,7 +714,7 @@
+           },
+           "format": {
+             "type": "string",
+-            "enum": [
++            "examples": [
+               "parquet",
+               "delta",
+               "json",
+@@ -657,7 +724,7 @@
+           },
+           "delimiter": {
+             "type": "string",
+-            "enum": [
++            "examples": [
+               "new_line",
+               "array"
+             ],
+@@ -788,7 +855,7 @@
+             "description": "Path to duckdb database file."
+           },
+           "schema": {
+-            "type": "integer",
++            "type": "string",
+             "description": "The name of the schema."
+           }
+         },
+@@ -893,6 +960,50 @@
+           "database"
+         ]
+       },
++      "HiveServer": {
++        "type": "object",
++        "title": "HiveServer",
++        "properties": {
++          "host": {
++            "type": "string",
++            "description": "The host to the Hive server. "
++          },
++          "port": {
++            "type": "integer",
++            "description": "The port to the Hive server. Defaults to 10000."
++          },
++          "database": {
++            "type": "string",
++            "description": "The name of the Hive database."
++          }
++        },
++        "required": [
++          "host",
++          "database"
++        ]
++      },
++      "ImpalaServer": {
++        "type": "object",
++        "title": "ImpalaServer",
++        "properties": {
++          "host": {
++            "type": "string",
++            "description": "The host to the Impala server."
++          },
++          "port": {
++            "type": "integer",
++            "description": "The port to the Impala server. Defaults to 21050."
++          },
++          "database": {
++            "type": "string",
++            "description": "The name of the Impala database."
++          }
++        },
++        "required": [
++          "host",
++          "database"
++        ]
++      },
+       "InformixServer": {
+         "type": "object",
+         "title": "InformixServer",
+@@ -914,6 +1025,25 @@
+           "host",
+           "database"
+         ]
++      },
++      "ZenServer": {
++        "type": "object",
++        "title": "ZenServer",
++        "properties": {
++          "host": {
++            "type": "string",
++            "description": "Hostname or IP address of the Zen server."
++          },
++          "port": {
++            "type": "integer",
++            "description": "Zen server SQL connections port. Defaults to 1583."
++          },
++          "database": {
++            "type": "string",
++            "description": "Database name to connect to on the Zen server."
++          }
++        },
++        "required": ["host", "database"]
+       },
+       "CustomServer": {
+         "type": "object",
+@@ -992,6 +1122,10 @@
+           "warehouse": {
+             "type": "string",
+             "description": "Name of the cluster or warehouse."
++          },
++          "stream": {
++            "type": "string",
++            "description": "Name of the data stream."
+           }
+         }
+       },
+@@ -1243,7 +1377,7 @@
+           },
+           "format": {
+             "type": "string",
+-            "enum": [
++            "examples": [
+               "parquet",
+               "delta",
+               "json",
+@@ -1253,7 +1387,7 @@
+           },
+           "delimiter": {
+             "type": "string",
+-            "enum": [
++            "examples": [
+               "new_line",
+               "array"
+             ],
+@@ -1279,7 +1413,7 @@
+           },
+           "format": {
+             "type": "string",
+-            "enum": [
++            "examples": [
+               "parquet",
+               "delta",
+               "json",
+@@ -1289,7 +1423,7 @@
+           },
+           "delimiter": {
+             "type": "string",
+-            "enum": [
++            "examples": [
+               "new_line",
+               "array"
+             ],
+@@ -1467,6 +1601,9 @@
+     "SchemaElement": {
+       "type": "object",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "name": {
+           "type": "string",
+           "description": "Name of the element."
+@@ -1520,6 +1657,13 @@
+             "$ref": "#/$defs/SchemaProperty"
+           }
+         },
++        "relationships": {
++          "type": "array",
++          "description": "A list of relationships to other properties. Each relationship must have 'from', 'to' and optionally 'type' field.",
++          "items": {
++            "$ref": "#/$defs/RelationshipSchemaLevel"
++          }
++        },
+         "quality": {
+           "$ref": "#/$defs/DataQualityChecks"
+         }
+@@ -1547,7 +1691,7 @@
+         "logicalType": {
+           "type": "string",
+           "description": "The logical element data type.",
+-          "enum": ["string", "date", "number", "integer", "object", "array", "boolean"]
++          "enum": ["string", "date", "timestamp", "time", "number", "integer", "object", "array", "boolean"]
+         },
+         "logicalTypeOptions": {
+           "type": "object",
+@@ -1618,6 +1762,13 @@
+           "default": false,
+           "description": "True or false indicator; If element is considered a critical data element (CDE) then true else false."
+         },
++        "relationships": {
++          "type": "array",
++          "description": "A list of relationships to other properties. When defined at property level, the 'from' field is implicit and should not be specified.",
++          "items": {
++            "$ref": "#/$defs/RelationshipPropertyLevel"
++          }
++        },
+         "quality": {
+           "$ref": "#/$defs/DataQualityChecks"
+         }
+@@ -1684,22 +1835,80 @@
+                     "description": "Format of the date. Follows the format as prescribed by [JDK DateTimeFormatter](https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html). For example, format 'yyyy-MM-dd'."
+                   },
+                   "exclusiveMaximum": {
+-                    "type": "boolean",
+-                    "default": false,
+-                    "description": "If set to true, all values are strictly less than the maximum value (values < maximum). Otherwise, less than or equal to the maximum value (values <= maximum)."
++                    "type": "string",
++                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
+                   },
+                   "maximum": {
+                     "type": "string",
+                     "description": "All date values are less than or equal to this value (values <= maximum)."
+                   },
+                   "exclusiveMinimum": {
+-                    "type": "boolean",
+-                    "default": false,
+-                    "description": "If set to true, all values are strictly greater than the minimum value (values > minimum). Otherwise, greater than or equal to the minimum value (values >= minimum)."
++                    "type": "string",
++                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
++                  },
++                  "minimum": {
++                    "type": "string",
++                    "description": "All date values are greater than or equal to this value (values >= minimum)."
++                  }
++                }
++              }
++            }
++          }
++        },
++        {
++          "if": {
++            "anyOf": [
++              {
++                "properties": {
++                  "logicalType": {
++                    "const": "timestamp"
++                  }
++                }
++              },
++              {
++                "properties": {
++                  "logicalType": {
++                    "const": "time"
++                  }
++                }
++              }
++            ]
++          },
++          "then": {
++            "properties": {
++              "logicalTypeOptions": {
++                "type": "object",
++                "additionalProperties": false,
++                "properties": {
++                  "format": {
++                    "type": "string",
++                    "examples": ["yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "HH:mm:ss"],
++                    "description": "Format of the date. Follows the format as prescribed by [JDK DateTimeFormatter](https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html). For example, format 'yyyy-MM-dd'."
+                   },
++                  "exclusiveMaximum": {
++                    "type": "string",
++                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
++                  },
++                  "maximum": {
++                    "type": "string",
++                    "description": "All date values are less than or equal to this value (values <= maximum)."
++                  },
++                  "exclusiveMinimum": {
++                    "type": "string",
++                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
++                  },
+                   "minimum": {
+                     "type": "string",
+                     "description": "All date values are greater than or equal to this value (values >= minimum)."
++                  },
++                  "timezone": {
++                    "type": "boolean",
++                    "description": "Whether the timestamp defines the timezone or not. If true, timezone information is included in the timestamp."
++                  },
++                  "defaultTimezone": {
++                    "type": "string",
++                    "description": "The default timezone of the timestamp. If timezone is not defined, the default timezone UTC is used.",
++                    "default": "Etc/UTC"
+                   }
+                 }
+               }
+@@ -1734,18 +1943,16 @@
+                     "description": "All values are less than or equal to this value (values <= maximum)."
+                   },
+                   "exclusiveMaximum": {
+-                    "type": "boolean",
+-                    "default": false,
+-                    "description": "If set to true, all values are strictly less than the maximum value (values < maximum). Otherwise, less than or equal to the maximum value (values <= maximum)."
++                    "type": "number",
++                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
+                   },
+                   "minimum": {
+                     "type": "number",
+                     "description": "All values are greater than or equal to this value (values >= minimum)."
+                   },
+                   "exclusiveMinimum": {
+-                    "type": "boolean",
+-                    "default": false,
+-                    "description": "If set to true, all values are strictly greater than the minimum value (values > minimum). Otherwise, greater than or equal to the minimum value (values >= minimum)."
++                    "type": "number",
++                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
+                   },
+                   "format": {
+                     "type": "string",
+@@ -1786,18 +1993,16 @@
+                     "description": "All values are less than or equal to this value (values <= maximum)."
+                   },
+                   "exclusiveMaximum": {
+-                    "type": "boolean",
+-                    "default": false,
+-                    "description": "If set to true, all values are strictly less than the maximum value (values < maximum). Otherwise, less than or equal to the maximum value (values <= maximum)."
++                    "type": "number",
++                    "description": "All values must be strictly less than this value (values < exclusiveMaximum)."
+                   },
+                   "minimum": {
+                     "type": "number",
+                     "description": "All values are greater than or equal to this value (values >= minimum)."
+                   },
+                   "exclusiveMinimum": {
+-                    "type": "boolean",
+-                    "default": false,
+-                    "description": "If set to true, all values are strictly greater than the minimum value (values > minimum). Otherwise, greater than or equal to the minimum value (values >= minimum)."
++                    "type": "number",
++                    "description": "All values must be strictly greater than this value (values > exclusiveMinimum)."
+                   },
+                   "format": {
+                     "type": "string",
+@@ -1929,6 +2134,9 @@
+     "DataQuality": {
+       "type": "object",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "authoritativeDefinitions": {
+           "$ref": "#/$defs/AuthoritativeDefinitions"
+         },
+@@ -1994,11 +2202,24 @@
+       "allOf": [
+         {
+           "if": {
+-            "properties": {
+-              "type": {
+-                "const": "library"
++            "anyOf": [
++              {
++                "properties": {
++                  "type": {
++                    "const": "library"
++                  }
++                },
++                "required": ["type"]
++              },
++              {
++                "properties": {
++                  "metric": {
++                    "type": "string"
++                  }
++                },
++                "required": ["metric"]
+               }
+-            }
++            ]
+           },
+           "then": {
+             "$ref": "#/$defs/DataQualityLibrary"
+@@ -2040,61 +2261,126 @@
+         "$ref": "#/$defs/DataQuality"
+       }
+     },
+-    "DataQualityLibrary": {
++    "DataQualityOperators": {
+       "type": "object",
+-      "properties": {
+-        "rule": {
+-          "type": "string",
+-          "description": "Define a data quality check based on the predefined rules as per ODCS.",
+-          "examples": ["duplicateCount", "validValues", "rowCount"]
++      "description": "Common comparison operators for data quality checks.",
++      "oneOf": [
++        {
++          "properties": {
++            "mustBe": {
++              "description": "Must be equal to the value to be valid. When using numbers, it is equivalent to '='."
++            }
++          },
++          "required": ["mustBe"]
+         },
+-        "mustBe": {
+-          "description": "Must be equal to the value to be valid. When using numbers, it is equivalent to '='."
++        {
++          "properties": {
++            "mustNotBe": {
++              "description": "Must not be equal to the value to be valid. When using numbers, it is equivalent to '!='."
++            }
++          },
++          "required": ["mustNotBe"]
+         },
+-        "mustNotBe": {
+-          "description": "Must not be equal to the value to be valid. When using numbers, it is equivalent to '!='."
++        {
++          "properties": {
++            "mustBeGreaterThan": {
++              "type": "number",
++              "description": "Must be greater than the value to be valid. It is equivalent to '>'."
++            }
++          },
++          "required": ["mustBeGreaterThan"]
+         },
+-        "mustBeGreaterThan": {
+-          "type": "number",
+-          "description": "Must be greater than the value to be valid. It is equivalent to '>'."
++        {
++          "properties": {
++            "mustBeGreaterOrEqualTo": {
++              "type": "number",
++              "description": "Must be greater than or equal to the value to be valid. It is equivalent to '>='."
++            }
++          },
++          "required": ["mustBeGreaterOrEqualTo"]
+         },
+-        "mustBeGreaterOrEqualTo": {
+-          "type": "number",
+-          "description": "Must be greater than or equal to the value to be valid. It is equivalent to '>='."
++        {
++          "properties": {
++            "mustBeLessThan": {
++              "type": "number",
++              "description": "Must be less than the value to be valid. It is equivalent to '<'."
++            }
++          },
++          "required": ["mustBeLessThan"]
+         },
+-        "mustBeLessThan": {
+-          "type": "number",
+-          "description": "Must be less than the value to be valid. It is equivalent to '<'."
+-        },
+-        "mustBeLessOrEqualTo": {
+-          "type": "number",
+-          "description": "Must be less than or equal to the value to be valid. It is equivalent to '<='."
++        {
++          "properties": {
++            "mustBeLessOrEqualTo": {
++              "type": "number",
++              "description": "Must be less than or equal to the value to be valid. It is equivalent to '<='."
++            }
++          },
++          "required": ["mustBeLessOrEqualTo"]
+         },
+-        "mustBeBetween": {
+-          "type": "array",
+-          "description": "Must be between the two numbers to be valid. Smallest number first in the array.",
+-          "minItems": 2,
+-          "maxItems": 2,
+-          "uniqueItems": true,
+-          "items": {
+-            "type": "number"
+-          }
++        {
++          "properties": {
++            "mustBeBetween": {
++              "type": "array",
++              "description": "Must be between the two numbers to be valid. Smallest number first in the array.",
++              "minItems": 2,
++              "maxItems": 2,
++              "uniqueItems": true,
++              "items": {
++                "type": "number"
++              }
++            }
++          },
++          "required": ["mustBeBetween"]
+         },
+-        "mustNotBeBetween": {
+-          "type": "array",
+-          "description": "Must not be between the two numbers to be valid. Smallest number first in the array.",
+-          "minItems": 2,
+-          "maxItems": 2,
+-          "uniqueItems": true,
+-          "items": {
+-            "type": "number"
+-          }
++        {
++          "properties": {
++            "mustNotBeBetween": {
++              "type": "array",
++              "description": "Must not be between the two numbers to be valid. Smallest number first in the array.",
++              "minItems": 2,
++              "maxItems": 2,
++              "uniqueItems": true,
++              "items": {
++                "type": "number"
++              }
++            }
++          },
++          "required": ["mustNotBeBetween"]
+         }
++      ]
++    },
++    "DataQualityLibrary": {
++      "type": "object",
++      "allOf": [
++        {
++          "$ref": "#/$defs/DataQualityOperators"
++        }
++      ],
++      "properties": {
++        "metric": {
++          "type": "string",
++          "description": "Define a data quality check based on the predefined metrics as per ODCS.",
++          "enum": ["nullValues", "missingValues", "invalidValues", "duplicateValues", "rowCount"]
++        },
++        "rule": {
++          "type": "string",
++          "deprecated": true,
++          "description": "Use metric instead"
++        },
++        "arguments": {
++          "type": "object",
++          "description": "Additional arguments for the metric, if needed."
++        }
+       },
+-      "required": ["rule"]
++      "required": ["metric"]
+     },
+     "DataQualitySql": {
+       "type": "object",
++      "allOf": [
++        {
++          "$ref": "#/$defs/DataQualityOperators"
++        }
++      ],
+       "properties": {
+         "query": {
+           "type": "string",
+@@ -2131,6 +2417,9 @@
+       "items": {
+         "type": "object",
+         "properties": {
++          "id": {
++            "$ref": "#/$defs/StableId"
++          },
+           "url": {
+             "type": "string",
+             "description": "URL to the authority."
+@@ -2139,6 +2428,10 @@
+             "type": "string",
+             "description": "Type of definition for authority: v2.3 adds standard values: `businessDefinition`, `transformationImplementation`, `videoTutorial`, `tutorial`, and `implementation`.",
+             "examples": ["businessDefinition", "transformationImplementation", "videoTutorial", "tutorial", "implementation"]
++          },
++          "description": {
++            "type": "string",
++            "description": "Description of the authoritative definition for humans."
+           }
+         },
+         "required": ["url", "type"],
+@@ -2155,6 +2448,9 @@
+     "SupportItem": {
+       "type": "object",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "channel": {
+           "type": "string",
+           "description": "Channel name or identifier."
+@@ -2169,25 +2465,31 @@
+         },
+         "tool": {
+           "type": "string",
+-          "description": "Name of the tool, value can be `email`, `slack`, `teams`, `discord`, `ticket`, or `other`.",
+-          "examples": ["email", "slack", "teams", "discord", "ticket", "other"]
++          "description": "Name of the tool, value can be `email`, `slack`, `teams`, `discord`, `ticket`, `googlechat`, or `other`.",
++          "examples": ["email", "slack", "teams", "discord", "ticket", "googlechat", "other"]
+         },
+         "scope": {
+           "type": "string",
+-          "description": "Scope can be: `interactive`, `announcements`, `issues`.",
+-          "examples": ["interactive", "announcements", "issues"]
++          "description": "Scope can be: `interactive`, `announcements`, `issues`, `notifications`.",
++          "examples": ["interactive", "announcements", "issues", "notifications"]
+         },
+         "invitationUrl": {
+           "type": "string",
+           "description": "Some tools uses invitation URL for requesting or subscribing. Follows the [URL scheme](https://en.wikipedia.org/wiki/URL#Syntax)."
++        },
++        "customProperties": {
++          "$ref": "#/$defs/CustomProperties"
+         }
+       },
+-      "required": ["channel", "url"],
++      "required": ["channel"],
+       "additionalProperties": false
+     },
+     "Pricing": {
+       "type": "object",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "priceAmount": {
+           "type": "number",
+           "description": "Subscription price per unit of measure in `priceUnit`."
+@@ -2203,23 +2505,21 @@
+       },
+       "additionalProperties": false
+     },
+-    "Team": {
++    "TeamMember": {
+       "type": "object",
++      "description": "Team member information.",
++      "additionalProperties": false,
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "username": {
+           "type": "string",
+-          "description": "The user's username or email.",
+-          "examples": [
+-            "mail@example.com",
+-            "uid12345678"
+-          ]
++          "description": "The user's username or email."
+         },
+         "name": {
+           "type": "string",
+-          "description": "The user's name.",
+-          "examples": [
+-            "Jane Doe"
+-          ]
++          "description": "The user's name."
+         },
+         "description": {
+           "type": "string",
+@@ -2242,13 +2542,67 @@
+         "replacedByUsername": {
+           "type": "string",
+           "description": "The username of the user who replaced the previous user."
++        },
++        "tags": {
++          "$ref": "#/$defs/Tags"
++        },
++        "customProperties": {
++          "type": "array",
++          "description": "Custom properties block.",
++          "items": {
++            "$ref": "#/$defs/CustomProperty"
++          }
++        },
++        "authoritativeDefinitions": {
++          "$ref": "#/$defs/AuthoritativeDefinitions"
+         }
+       },
+-      "additionalProperties": false
++      "required": ["username"]
+     },
++    "Team": {
++      "type": "object",
++      "description": "Team information.",
++      "additionalProperties": false,
++      "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
++        "name": {
++          "type": "string",
++          "description": "Team name."
++        },
++        "description": {
++          "type": "string",
++          "description": "Team description."
++        },
++        "members": {
++          "type": "array",
++          "description": "List of members.",
++          "items": {
++            "$ref": "#/$defs/TeamMember"
++          }
++        },
++        "tags": {
++          "$ref": "#/$defs/Tags"
++        },
++        "customProperties": {
++          "type": "array",
++          "description": "Custom properties block.",
++          "items": {
++            "$ref": "#/$defs/CustomProperty"
++          }
++        },
++        "authoritativeDefinitions": {
++          "$ref": "#/$defs/AuthoritativeDefinitions"
++        }
++      }
++    },
+     "Role": {
+       "type": "object",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "role": {
+           "type": "string",
+           "description": "Name of the IAM role that provides access to the dataset."
+@@ -2279,6 +2633,9 @@
+     "ServiceLevelAgreementProperty": {
+       "type": "object",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "property": {
+           "type": "string",
+           "description": "Specific property in SLA, check the periodic table. May requires units (more details to come)."
+@@ -2319,6 +2676,21 @@
+           "type": "string",
+           "description": "Describes the importance of the SLA from the list of: `regulatory`, `analytics`, or `operational`.",
+           "examples": ["regulatory", "analytics", "operational"]
++        },
++        "description": {
++          "type": "string",
++          "description": "Description of the SLA for humans.",
++          "examples": ["99.9% of the time, data is available by 6 AM UTC"]
++        },
++        "scheduler": {
++          "type": "string",
++          "description": "Name of the scheduler, can be cron or any tool your organization support.",
++          "examples": ["cron"]
++        },
++        "schedule": {
++          "type": "string",
++          "description": "Configuration information for the scheduling tool, for cron a possible value is 0 20 * * *.",
++          "examples": ["0 20 * * *"]
+         }
+       },
+       "required": ["property", "value"],
+@@ -2334,6 +2706,9 @@
+     "CustomProperty": {
+       "type": "object",
+       "properties": {
++        "id": {
++          "$ref": "#/$defs/StableId"
++        },
+         "property": {
+           "type": "string",
+           "description": "The name of the key. Names should be in camel case–the same as if they were permanent properties in the contract."
+@@ -2341,6 +2716,10 @@
+         "value": {
+           "$ref": "#/$defs/AnyType",
+           "description": "The value of the key."
++        },
++        "description": {
++          "type": "string",
++          "description": "Description of the custom property."
+         }
+       },
+       "required": ["property", "value"],
+@@ -2389,6 +2768,161 @@
+           "type": "null"
+         }
+       ]
++    },
++    "RelationshipBase": {
++      "type": "object",
++      "description": "Base definition for relationships between properties, typically for foreign key constraints.",
++      "properties": {
++        "type": {
++          "type": "string",
++          "description": "The type of relationship. Defaults to 'foreignKey'.",
++          "default": "foreignKey",
++          "enum": ["foreignKey"]
++        },
++        "from": {
++          "oneOf": [
++            {
++              "anyOf": [
++                {
++                  "$ref": "#/$defs/ShorthandReference"
++                },
++                {
++                  "$ref": "#/$defs/FullyQualifiedReference"
++                }
++              ],
++              "description": "Source property reference using fully qualified or shorthand notation."
++            },
++            {
++              "type": "array",
++              "description": "Array of source properties for composite keys.",
++              "items": {
++                "anyOf": [
++                  {
++                    "$ref": "#/$defs/ShorthandReference"
++                  },
++                  {
++                    "$ref": "#/$defs/FullyQualifiedReference"
++                  }
++                ]
++              },
++              "minItems": 1
++            }
++          ],
++          "description": "Source property or properties."
++        },
++        "to": {
++          "oneOf": [
++            {
++              "anyOf": [
++                {
++                  "$ref": "#/$defs/ShorthandReference"
++                },
++                {
++                  "$ref": "#/$defs/FullyQualifiedReference"
++                }
++              ],
++              "description": "Target property reference using fully qualified or shorthand notation."
++            },
++            {
++              "type": "array",
++              "description": "Array of target properties for composite keys.",
++              "items": {
++                "anyOf": [
++                  {
++                    "$ref": "#/$defs/ShorthandReference"
++                  },
++                  {
++                    "$ref": "#/$defs/FullyQualifiedReference"
++                  }
++                ]
++              },
++              "minItems": 1
++            }
++          ],
++          "description": "Target property or properties to reference."
++        },
++        "customProperties": {
++          "$ref": "#/$defs/CustomProperties"
++        }
++      }
++    },
++    "RelationshipSchemaLevel": {
++      "type": "object",
++      "description": "Relationship definition at schema level, requiring both 'from' and 'to' fields with matching types.",
++      "allOf": [
++        {
++          "$ref": "#/$defs/RelationshipBase"
++        },
++        {
++          "required": ["from", "to"]
++        },
++        {
++          "oneOf": [
++            {
++              "description": "Single-column relationship - both fields must be strings",
++              "properties": {
++                "from": {
++                  "type": "string"
++                },
++                "to": {
++                  "type": "string"
++                }
++              }
++            },
++            {
++              "description": "Composite key relationship - both fields must be arrays with matching lengths",
++              "properties": {
++                "from": {
++                  "type": "array",
++                  "items": {
++                    "type": "string"
++                  },
++                  "minItems": 1
++                },
++                "to": {
++                  "type": "array",
++                  "items": {
++                    "type": "string"
++                  },
++                  "minItems": 1
++                }
++              }
++            }
++          ]
++        }
++      ],
++      "unevaluatedProperties": false
++    },
++    "RelationshipPropertyLevel": {
++      "type": "object",
++      "description": "Relationship definition at property level, where 'from' is implicitly the current property.",
++      "allOf": [
++        {
++          "$ref": "#/$defs/RelationshipBase"
++        },
++        {
++          "type": "object",
++          "required": ["to"]
++        },
++        {
++          "not": {
++            "required": ["from"]
++          },
++          "description": "The 'from' field must not be specified at property level as it is implicitly derived from the property context"
++        }
++      ],
++      "unevaluatedProperties": false
++    },
++    "Relationship": {
++      "description": "Compatibility wrapper for relationship definitions.",
++      "oneOf": [
++        {
++          "$ref": "#/$defs/RelationshipSchemaLevel"
++        },
++        {
++          "$ref": "#/$defs/RelationshipPropertyLevel"
++        }
++      ]
+     }
+   }
+ }

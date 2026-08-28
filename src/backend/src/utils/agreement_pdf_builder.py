@@ -1,0 +1,313 @@
+"""
+Generate agreement documents from wizard session data.
+
+Primary strategy: real PDF via fpdf2 (``build_agreement_pdf``).
+Fallback: styled HTML document (``build_agreement_html``).
+"""
+
+import json
+from datetime import datetime
+from html import escape
+from typing import Any, Dict, List, Optional
+
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
+
+try:
+    from fpdf import FPDF
+    _HAS_FPDF = True
+except ImportError:
+    _HAS_FPDF = False
+    logger.info("fpdf2 not installed – PDF generation will fall back to HTML")
+
+# Non-visual step types — skip in the agreement document
+_NON_VISUAL = {"persist_agreement", "generate_pdf", "deliver", "pass", "fail"}
+
+
+def _format_cosigner(s: Any) -> str:
+    """Format a co-signer entry for human-readable display.
+
+    The wizard records co-signers as dicts shaped like
+    ``{"type": "user", "value": "alice@x.com", "display": "Alice"}``. Older
+    sessions may have stored plain strings. Render dicts as
+    ``"<display> (<value>)"`` (or just the display when value is empty / equal
+    to display) and fall back to ``str()`` for any non-dict legacy entries.
+    """
+    if isinstance(s, dict):
+        display = s.get("display") or s.get("value") or "(unknown)"
+        value = s.get("value", "")
+        if not value or display == value:
+            return display
+        return f"{display} ({value})"
+    return str(s)
+
+
+# ---------------------------------------------------------------------------
+# PDF generation (fpdf2)
+# ---------------------------------------------------------------------------
+
+def build_agreement_pdf(
+    workflow_name: str,
+    entity_type: str,
+    entity_id: str,
+    step_results: List[Dict[str, Any]],
+    snapshot: Optional[str] = None,
+    created_by: Optional[str] = None,
+    created_at: Optional[datetime] = None,
+    workflow_version: Optional[int] = None,
+) -> bytes:
+    """Build a PDF document summarizing the agreement. Returns PDF bytes.
+
+    Raises ``RuntimeError`` if fpdf2 is not installed.
+    """
+    if not _HAS_FPDF:
+        raise RuntimeError("fpdf2 is not installed – cannot generate PDF")
+
+    snapshot_data = json.loads(snapshot) if snapshot else {}
+    steps = snapshot_data.get("steps", [])
+    version = workflow_version or snapshot_data.get("version")
+    ts = created_at.strftime("%Y-%m-%d %H:%M UTC") if created_at else "Unknown"
+    version_label = f" (v{version})" if version else ""
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=25)
+    pdf.add_page()
+
+    # Title
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(30, 64, 175)  # blue
+    pdf.cell(0, 12, f"Agreement: {workflow_name}{version_label}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_draw_color(30, 64, 175)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(4)
+
+    # Metadata
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(107, 114, 128)  # gray
+    pdf.cell(0, 5, f"Entity: {entity_type} / {entity_id}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"Signed by: {created_by or 'Unknown'}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"Date: {ts}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    # Steps
+    for i, sr in enumerate(step_results):
+        step_id = sr.get("step_id", f"step-{i}")
+        payload = sr.get("payload", {})
+        step_meta = next((s for s in steps if s.get("step_id") == step_id), {})
+        step_name = step_meta.get("name", step_id)
+        step_type = step_meta.get("step_type", "unknown")
+        config = step_meta.get("config", {})
+
+        if step_type in _NON_VISUAL:
+            continue
+
+        # Step header
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(55, 65, 81)
+        pdf.cell(0, 8, step_name, new_x="LMARGIN", new_y="NEXT")
+
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(26, 26, 26)
+
+        if step_type == "legal_document":
+            ack = payload.get("acknowledged", False)
+            label = config.get("acknowledgement_label", "Acknowledged")
+            mark = "[x]" if ack else "[ ]"
+            pdf.cell(0, 6, f"  {mark} {label}", new_x="LMARGIN", new_y="NEXT")
+
+        elif step_type == "acknowledgement_checklist":
+            items = config.get("items", [])
+            checked = payload.get("items", {})
+            for item in items:
+                item_id = item.get("id", "")
+                is_checked = checked.get(item_id, False)
+                mark = "[x]" if is_checked else "[ ]"
+                pdf.cell(0, 6, f"  {mark} {item.get('label', '')}", new_x="LMARGIN", new_y="NEXT")
+
+        elif step_type == "co_signers":
+            signers = payload.get("co_signers", [])
+            if signers:
+                pdf.cell(0, 6, "  Co-signers:", new_x="LMARGIN", new_y="NEXT")
+                for s in signers:
+                    pdf.cell(0, 6, f"    - {_format_cosigner(s)}", new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(0, 6, "  No co-signers", new_x="LMARGIN", new_y="NEXT")
+
+        elif step_type == "user_action":
+            for key, value in payload.items():
+                if isinstance(value, str) and value.strip():
+                    label = key.replace("_", " ").title()
+                    pdf.cell(0, 6, f"  {label}: {value}", new_x="LMARGIN", new_y="NEXT")
+
+        else:
+            # Generic fallback: show payload key/value pairs
+            for key, value in payload.items():
+                if isinstance(value, (str, int, float, bool)):
+                    label = key.replace("_", " ").title()
+                    pdf.cell(0, 6, f"  {label}: {value}", new_x="LMARGIN", new_y="NEXT")
+
+        pdf.ln(4)
+
+    # Signature block
+    pdf.ln(8)
+    pdf.set_draw_color(229, 231, 235)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, f"Digitally signed by: {created_by or 'Unknown'}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Date: {ts}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Workflow: {workflow_name}{version_label}", new_x="LMARGIN", new_y="NEXT")
+
+    return pdf.output()
+
+
+# ---------------------------------------------------------------------------
+# HTML fallback
+# ---------------------------------------------------------------------------
+
+def build_agreement_html(
+    workflow_name: str,
+    entity_type: str,
+    entity_id: str,
+    step_results: List[Dict[str, Any]],
+    snapshot: Optional[str] = None,
+    created_by: Optional[str] = None,
+    created_at: Optional[datetime] = None,
+) -> str:
+    """Build an HTML document summarizing the agreement.
+
+    Args:
+        workflow_name: Name of the approval workflow.
+        entity_type: Entity type (e.g. data_product, dataset).
+        entity_id: Entity identifier.
+        step_results: List of { step_id, payload } dicts from the wizard session.
+        snapshot: JSON string of the workflow snapshot (contains steps metadata).
+        created_by: Email/username of the signer.
+        created_at: Timestamp when the agreement was created.
+
+    Returns:
+        A complete HTML document string suitable for rendering or print-to-PDF.
+    """
+    snapshot_data = json.loads(snapshot) if snapshot else {}
+    steps = snapshot_data.get("steps", [])
+
+    e = escape  # shorthand
+    ts = created_at.strftime("%Y-%m-%d %H:%M UTC") if created_at else "Unknown"
+
+    html_parts = [
+        "<!DOCTYPE html>",
+        "<html><head>",
+        "<meta charset='utf-8'>",
+        f"<title>Agreement - {e(workflow_name)}</title>",
+        "<style>",
+        "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; "
+        "max-width: 800px; margin: 40px auto; padding: 20px; color: #1a1a1a; }",
+        "h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 8px; }",
+        "h2 { color: #374151; margin-top: 24px; }",
+        ".meta { color: #6b7280; font-size: 14px; margin-bottom: 24px; }",
+        ".step { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; "
+        "padding: 16px; margin: 12px 0; }",
+        ".step-title { font-weight: 600; margin-bottom: 8px; }",
+        ".field { margin: 4px 0; }",
+        ".field-label { color: #6b7280; font-size: 13px; }",
+        ".field-value { font-weight: 500; }",
+        ".signature { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; }",
+        ".checkmark { color: #059669; }",
+        ".crossmark { color: #dc2626; }",
+        "@media print { body { margin: 0; } }",
+        "</style>",
+        "</head><body>",
+        f"<h1>Agreement: {e(workflow_name)}</h1>",
+        "<div class='meta'>",
+        f"Entity: {e(entity_type)} / {e(entity_id)}<br>",
+        f"Signed by: {e(created_by or 'Unknown')}<br>",
+        f"Date: {e(ts)}",
+        "</div>",
+    ]
+
+    # Render each step's results
+    for i, sr in enumerate(step_results):
+        step_id = sr.get("step_id", f"step-{i}")
+        payload = sr.get("payload", {})
+        # Find matching step in snapshot for metadata
+        step_meta = next((s for s in steps if s.get("step_id") == step_id), {})
+        step_name = step_meta.get("name", step_id)
+        step_type = step_meta.get("step_type", "unknown")
+        config = step_meta.get("config", {})
+
+        # Skip non-visual/internal steps
+        if step_type in _NON_VISUAL:
+            continue
+
+        html_parts.append("<div class='step'>")
+        html_parts.append(f"<div class='step-title'>{e(step_name)}</div>")
+
+        if step_type == "legal_document":
+            ack = payload.get("acknowledged", False)
+            mark_cls = "checkmark" if ack else "crossmark"
+            mark_char = "\u2713" if ack else "\u2717"
+            label = e(config.get("acknowledgement_label", "Acknowledged"))
+            html_parts.append(
+                f"<div class='field'><span class='{mark_cls}'>{mark_char}</span> {label}</div>"
+            )
+
+        elif step_type == "acknowledgement_checklist":
+            items = config.get("items", [])
+            checked = payload.get("items", {})
+            for item in items:
+                item_id = item.get("id", "")
+                is_checked = checked.get(item_id, False)
+                mark_cls = "checkmark" if is_checked else "crossmark"
+                mark_char = "\u2713" if is_checked else "\u2717"
+                label = e(item.get("label", ""))
+                html_parts.append(
+                    f"<div class='field'><span class='{mark_cls}'>{mark_char}</span> {label}</div>"
+                )
+
+        elif step_type == "co_signers":
+            signers = payload.get("co_signers", [])
+            if signers:
+                html_parts.append(
+                    "<div class='field'><span class='field-label'>Co-signers:</span></div>"
+                )
+                for s in signers:
+                    html_parts.append(f"<div class='field'>&bull; {e(_format_cosigner(s))}</div>")
+            else:
+                html_parts.append(
+                    "<div class='field'><span class='field-label'>No co-signers</span></div>"
+                )
+
+        elif step_type == "user_action":
+            for key, value in payload.items():
+                if isinstance(value, str) and value.strip():
+                    label = e(key.replace("_", " ").title())
+                    html_parts.append(
+                        f"<div class='field'><span class='field-label'>{label}:</span> "
+                        f"<span class='field-value'>{e(value)}</span></div>"
+                    )
+
+        else:
+            # Generic fallback: show payload key/value pairs
+            for key, value in payload.items():
+                if isinstance(value, (str, int, float, bool)):
+                    label = e(key.replace("_", " ").title())
+                    html_parts.append(
+                        f"<div class='field'><span class='field-label'>{label}:</span> "
+                        f"<span class='field-value'>{e(str(value))}</span></div>"
+                    )
+
+        html_parts.append("</div>")
+
+    # Signature block
+    html_parts.extend([
+        "<div class='signature'>",
+        f"<strong>Digitally signed by:</strong> {e(created_by or 'Unknown')}<br>",
+        f"<strong>Date:</strong> {e(ts)}<br>",
+        f"<strong>Workflow:</strong> {e(workflow_name)}",
+        "</div>",
+        "</body></html>",
+    ])
+
+    return "\n".join(html_parts)

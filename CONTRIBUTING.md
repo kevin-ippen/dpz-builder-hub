@@ -1,0 +1,697 @@
+# Contributing to Ontos
+
+Thank you for your interest in contributing to Ontos! This document provides guidelines and instructions for contributing to the project.
+
+## Table of Contents
+
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Development Setup](#development-setup)
+- [Commit Guidelines](#commit-guidelines)
+- [Versioning](#versioning)
+- [Release Process](#release-process)
+- [Pull Request Process](#pull-request-process)
+- [Code Style](#code-style)
+- [Testing](#testing)
+- [License](#license)
+
+---
+
+## Code of Conduct
+
+Please be respectful and professional in all interactions. We're building a collaborative community around data governance.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Python 3.10 - 3.12** (as defined in `pyproject.toml`)
+- **Node.js 18+** (includes npm, the frontend package manager)
+- **Hatch** (Python build tool):
+  ```bash
+  pip install hatch
+  ```
+
+### Fork and Clone
+
+1. Fork the repository on GitHub
+2. Clone your fork:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/ontos.git
+   cd ontos
+   ```
+3. Add the upstream remote:
+   ```bash
+   git remote add upstream https://github.com/databrickslabs/ontos.git
+   ```
+
+---
+
+## Development Setup
+
+### 1. Install Dependencies
+
+```bash
+# Frontend dependencies
+cd src/frontend
+npm install
+
+# Backend dependencies are managed by Hatch and installed automatically
+```
+
+#### Working Behind a Private npm Mirror (optional)
+
+Some corporate environments block the public npm registry and require all
+package traffic to flow through an internal mirror (e.g., Nexus, Artifactory,
+Verdaccio, or an HTTPS pass-through proxy). npm handles this cleanly: point the
+registry at your mirror and npm rewrites the host of each `resolved` URL at
+install time. Because npm's `replace-registry-host` defaults to `"npmjs"`, the
+committed `package-lock.json` keeps its canonical `https://registry.npmjs.org/`
+URLs, and `npm ci` does **not** persist the rewrite back to the lockfile — so
+there is no diff to worry about and no git filter needed.
+
+Set the registry per-clone without committing anything:
+
+```bash
+# In the frontend project (or globally via ~/.npmrc)
+npm config set registry https://<your-mirror-host>/
+```
+
+`npm install`, `npm ci`, and `npm install <pkg>` all work normally, and any
+commits you make contain only real dependency changes against the public
+registry URLs. Integrity hashes (`integrity sha512-...`) are independent of the
+URL, so package verification is unaffected.
+
+### 2. Configure Environment
+
+Create a `.env` file in the project root:
+
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+See **[CONFIGURING.md](CONFIGURING.md)** for complete documentation on:
+- All environment variables
+- Database setup (local PostgreSQL and Lakebase)
+- Connection pool tuning
+- Default roles configuration
+
+### 3. Start Development Servers
+
+**Frontend** (Terminal 1):
+```bash
+cd src/frontend
+npm run dev:frontend
+```
+
+**Backend** (Terminal 2):
+```bash
+cd src
+npm run dev:backend
+```
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs (Swagger): http://localhost:8000/docs
+
+### Running Multiple Worktrees Side-by-Side
+
+If you develop in more than one git worktree at once (e.g. one per feature
+branch), **each worktree must run its own frontend and backend on distinct
+ports** — otherwise a second worktree's servers bind to the same 3000/8000 and
+either fail to start or, worse, serve one branch's frontend against the other
+branch's backend. The default `3000`/`8000` are fine for a single worktree;
+give every additional worktree its own pair.
+
+The frontend port and proxy target are env-var driven; the backend port is
+passed directly to `uvicorn`:
+
+| Variable | Default | Controls |
+|----------|---------|----------|
+| `VITE_PORT` | `3000` | Vite dev-server port |
+| `VITE_PROXY_TARGET` | `http://localhost:8000` | backend the Vite dev server proxies `/api`, `/docs`, `/redoc` to |
+
+Point the frontend at its own backend with `VITE_PROXY_TARGET` so the proxy
+targets the matching port. Example — a second worktree on backend `8100` /
+frontend `3100`:
+
+**Backend** (from `src/`): invoke `uvicorn` directly with the port you want.
+The `yarn dev:backend` / `hatch -e dev run dev-backend` shortcut is hard-coded to
+`8000`, so a secondary worktree runs the underlying command instead:
+```bash
+hatch -e dev run uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8100
+```
+
+**Frontend** (from `src/frontend/`):
+```bash
+VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 yarn dev:frontend
+```
+
+Both worktrees can share the same local `app_ontos` PostgreSQL database; only
+the HTTP ports need to differ.
+
+---
+
+## Commit Guidelines
+
+We use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages. This enables automatic changelog generation and semantic versioning.
+
+### Commit Message Format
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Types
+
+| Type | Description |
+|------|-------------|
+| `feat` | A new feature |
+| `fix` | A bug fix |
+| `docs` | Documentation only changes |
+| `style` | Code style changes (formatting, missing semicolons, etc.) |
+| `refactor` | Code change that neither fixes a bug nor adds a feature |
+| `perf` | Performance improvements |
+| `test` | Adding or updating tests |
+| `build` | Changes to build system or dependencies |
+| `ci` | Changes to CI configuration |
+| `chore` | Other changes that don't modify src or test files |
+| `revert` | Reverts a previous commit |
+
+### Scope (optional)
+
+The scope provides additional context. Common scopes include:
+
+- `frontend` - React/TypeScript frontend changes
+- `backend` - Python/FastAPI backend changes
+- `api` - API endpoint changes
+- `db` - Database/model changes
+- `auth` - Authentication/authorization changes
+- `contracts` - Data contracts feature
+- `products` - Data products feature
+- `compliance` - Compliance policies feature
+- `semantic` - Semantic models feature
+- `mcp` - MCP integration
+
+### Examples
+
+```bash
+# Feature
+feat(contracts): add schema validation for ODCS v3.1.0
+
+# Bug fix
+fix(backend): correct date parsing in contract import
+
+# Documentation
+docs: update API documentation for MCP endpoints
+
+# Refactoring
+refactor(frontend): extract form components into shared module
+
+# Breaking change (use ! or BREAKING CHANGE footer)
+feat(api)!: change data product response format
+
+# With body and footer
+feat(products): add data lineage visualization
+
+Implements interactive DAG view for data product dependencies.
+Uses react-flow for rendering and supports zoom/pan navigation.
+
+Closes #123
+```
+
+### Pre-commit Checks
+
+Before committing, ensure:
+
+1. **Tests pass**:
+   ```bash
+   # Backend tests
+   cd src && hatch -e dev run test
+   
+   # Frontend tests
+   cd src/frontend && npm run test:run
+   ```
+
+2. **Linting passes**:
+   ```bash
+   # Backend
+   cd src && hatch -e dev run lint:all
+   
+   # Frontend
+   cd src/frontend && npm run type-check
+   ```
+
+3. **Commit message follows convention**
+
+---
+
+## Versioning
+
+We use [Semantic Versioning](https://semver.org/) (SemVer):
+
+- **MAJOR** (X.0.0): Breaking changes
+- **MINOR** (0.X.0): New features (backward compatible)
+- **PATCH** (0.0.X): Bug fixes (backward compatible)
+
+### Version Files
+
+The project tracks version in multiple files:
+
+| File | Purpose |
+|------|---------|
+| `src/pyproject.toml` | Python/Hatch build config (source of truth) |
+| `src/backend/src/__init__.py` | Python runtime `__version__` |
+| `src/frontend/package.json` | Node/npm frontend |
+| `src/package.json` | Root build helper |
+
+### Bump Version Script
+
+Use the provided script to keep all version files in sync:
+
+```bash
+# View current versions
+python src/scripts/bump_version.py
+
+# Update all files to a new version
+python src/scripts/bump_version.py 0.5.0
+
+# Dry run (preview changes without applying)
+python src/scripts/bump_version.py --dry-run 0.5.0
+```
+
+The script will:
+1. Update all version files
+2. Print next steps for committing and tagging
+
+---
+
+## Release Process
+
+### 1. Prepare Release
+
+```bash
+# Ensure you're on main and up to date
+git checkout main
+git pull upstream main
+
+# Create release branch (optional for larger releases)
+git checkout -b release/0.5.0
+```
+
+### 2. Update Version
+
+```bash
+python src/scripts/bump_version.py 0.5.0
+```
+
+### 3. Update Changelog (if maintaining one)
+
+Add release notes to `CHANGELOG.md` summarizing changes since last release.
+
+### 4. Commit and Tag
+
+```bash
+git add -A
+git commit -m "chore: bump version to 0.5.0"
+git tag v0.5.0
+```
+
+### 5. Push
+
+```bash
+git push origin main
+git push origin v0.5.0
+# Or if on release branch:
+# git push origin release/0.5.0
+# Then create PR and merge
+```
+
+### 6. Create GitHub Release
+
+1. Go to GitHub Releases
+2. Click "Draft a new release"
+3. Select the tag `v0.5.0`
+4. Add release notes (can be auto-generated from commits)
+5. Publish
+
+### 7. Deploy
+
+```bash
+databricks bundle deploy --var="catalog=app_data" --var="schema=app_ontos"
+databricks apps deploy <app-name>
+```
+
+---
+
+## Pull Request Process
+
+### Before Submitting
+
+1. **Sync with upstream**:
+   ```bash
+   git fetch upstream
+   git rebase upstream/main
+   ```
+
+2. **Run tests**:
+   ```bash
+   cd src && hatch -e dev run test
+   cd src/frontend && npm run test:run
+   ```
+
+3. **Check types and lint**:
+   ```bash
+   cd src/frontend && npm run type-check
+   ```
+
+### PR Guidelines
+
+1. **Title**: Use conventional commit format
+   - `feat(products): add export to YAML feature`
+   
+2. **Description**: Include:
+   - What changes were made
+   - Why the changes were needed
+   - How to test the changes
+   - Screenshots for UI changes
+
+3. **Size**: Keep PRs focused and reasonably sized
+   - Large features should be broken into smaller PRs
+
+4. **Reviews**: 
+   - At least one approval required
+   - Address all review comments
+
+### After Merge
+
+- Delete your feature branch
+- Pull latest main to your local
+
+---
+
+## Code Style
+
+### Python (Backend)
+
+- Follow [PEP 8](https://pep8.org/)
+- Use type hints extensively
+- Use `async def` for async operations
+- Max line length: 100 characters
+
+```python
+async def get_data_product(
+    product_id: str,
+    db: Session = Depends(get_db),
+) -> DataProductResponse:
+    """Retrieve a data product by ID."""
+    ...
+```
+
+### TypeScript (Frontend)
+
+- Use TypeScript strictly (no `any` where avoidable)
+- Prefer `interface` over `type` for object shapes
+- Use functional components with hooks
+- Follow React best practices
+
+```typescript
+interface DataProductCardProps {
+  product: DataProduct;
+  onSelect: (id: string) => void;
+}
+
+export const DataProductCard: React.FC<DataProductCardProps> = ({
+  product,
+  onSelect,
+}) => {
+  // ...
+};
+```
+
+### File Naming
+
+- **Python**: `snake_case.py` (e.g., `data_products_manager.py`)
+- **TypeScript**: `kebab-case.tsx` (e.g., `data-product-card.tsx`)
+- **Tests**: `test_*.py` or `*.test.tsx`
+
+---
+
+## Testing
+
+### Backend Tests
+
+```bash
+cd src
+
+# Run all tests
+hatch -e dev run test
+
+# Run with coverage
+hatch -e dev run test-cov
+
+# Run specific test file
+hatch -e dev run pytest backend/src/tests/unit/test_data_products.py
+```
+
+### Frontend Tests
+
+```bash
+cd src/frontend
+
+# Run tests
+npm run test:run
+
+# Run with coverage
+npm run test:coverage
+
+# Run in watch mode
+npm run test:watch
+
+# Run E2E tests
+npm run test:e2e
+```
+
+### Writing Tests
+
+- Place unit tests next to the code or in `tests/unit/`
+- Name tests descriptively: `test_create_data_product_validates_schema`
+- Use fixtures for common setup
+- Aim for >80% coverage on new code
+
+### Local Directory Provider (PrincipalPicker testing)
+
+Many surfaces in the app use the `PrincipalPicker` to resolve users and
+groups against the configured Directory provider (Roles, Entitlements,
+Reviews, Comments audience, Workflow Designer custom principals, Data
+Contract wizard owner/stakeholders, etc.). To exercise the configured
+code path locally without standing up an Entra ID tenant or a Lakebase
+table, use the bundled `file` provider against the sample CSV at
+`src/backend/src/data/principals.csv`.
+
+The CSV ships with three users (Alice / Bob / Carol) and three groups
+(Producers / Consumers / Admins) and matches the format the
+`FileProvider` expects:
+
+```csv
+type,id,display_name,sub_label
+user,alice@example.com,Alice Liddell,alice@example.com
+user,bob@example.com,Bob Builder,bob@example.com
+user,carol@example.com,Carol Carlsson,carol@example.com
+group,Producers,Data Producers,producers-guid
+group,Consumers,Data Consumers,consumers-guid
+group,Admins,Platform Admins,admins-guid
+```
+
+**Configure via the UI (recommended):**
+
+1. Start the dev servers (see [Development Setup](#development-setup)).
+2. Sign in as a user with `settings:READ_WRITE` permission.
+3. Navigate to **Settings → Integrations → Directory**.
+4. Pick **CSV file (test / demo)** as the Provider.
+5. Set **CSV file path** to the absolute path of the bundled file, e.g.
+   `/Users/you/code/ontos/src/backend/src/data/principals.csv`.
+6. Click **Save**, then **Test connection** — you should see a success
+   toast.
+
+**Configure via the backend directly** (e.g. in a test fixture or
+seed script):
+
+```python
+from src.repositories.app_settings_repository import app_settings_repo
+
+app_settings_repo.set_by_key(db, "DIRECTORY_PROVIDER_TYPE", "file")
+app_settings_repo.set_by_key(
+    db,
+    "DIRECTORY_FILE_PATH",
+    "/absolute/path/to/src/backend/src/data/principals.csv",
+)
+```
+
+**Verify it works:**
+
+- `GET /api/directory/status` → `{ "configured": true, "provider_type": "file", "file_path": "/…/principals.csv" }`
+- `GET /api/directory/search?q=ali&types=users` → returns Alice
+- In any picker (e.g. Assign Owner on a Data Product), type `al` —
+  the dropdown should show a two-line row with `Alice Liddell` and
+  `alice@example.com` underneath.
+
+The file is re-read whenever its `mtime` advances, so editing the CSV
+takes effect on the next picker query without a server restart. The
+sample file is checked in as a fixture — feel free to extend it
+locally, but please don't commit org-specific edits.
+
+### Testing with Different User Personas (Runtime Impersonation)
+
+The app supports per-request user impersonation via HTTP headers, so you can
+test how features behave for different personas (Admin, Data Producer,
+Consumer, etc.) against the **same running backend** — no restarts, works with
+or without the Vite dev server in front.
+
+**Setup:**
+
+1. Pick a shared-secret token, e.g. `openssl rand -hex 32`.
+2. Set it on the backend: `TEST_USER_TOKEN=<your-token>` in
+   `src/backend/.env`.
+3. (Optional, for the UI picker) set the same value as
+   `VITE_TEST_USER_TOKEN=<your-token>` in `src/frontend/.env`.
+
+**Usage from the UI:**
+
+When `TEST_USER_TOKEN` is configured, the user-info dropdown gains a
+"Test persona" section listing personas defined in
+`src/backend/src/data/test_personas.yaml`. Pick one and the page reloads
+with every API request impersonating that user. A yellow ring around the
+avatar indicates an active persona.
+
+**Usage from curl / Playwright / any HTTP client:**
+
+```bash
+curl -H "X-Test-Token: <your-token>" \
+     -H "X-Test-User-Email: producer@test.local" \
+     -H "X-Test-User-Groups: [\"data-producers\"]" \
+     http://localhost:8000/api/user/details
+```
+
+- `X-Test-User-Email` is required when `X-Test-Token` matches.
+- `X-Test-User-Groups` is optional (JSON array or comma-separated). When
+  omitted, the backend falls back to a real SCIM lookup so the persona
+  reflects actual workspace state.
+- Optional refinement headers: `X-Test-User-Username`,
+  `X-Test-User-Name`, `X-Test-User-Ip`.
+
+**Security notes:**
+
+- The override is gated on `TEST_USER_TOKEN` being set server-side. Leave it
+  UNSET in production.
+- The token itself is never returned by the server. The persona discovery
+  endpoint (`GET /api/test/personas`) returns 404 when the feature is
+  disabled.
+- This mechanism is complementary to the env-based `MOCK_USER_*` variables
+  (which require restarts) and to the in-process FastAPI
+  `app.dependency_overrides[get_user_details_from_sdk]` pattern used by
+  most integration tests.
+
+See `src/backend/src/tests/integration/test_user_header_override.py` for
+worked examples.
+
+---
+
+## License
+
+By contributing to Ontos, you agree that your contributions will be licensed under the project's license (see LICENSE.txt).
+
+---
+
+## Supply Chain Security
+
+This project follows GitHub Actions supply chain security best practices as required for `databrickslabs` repos.
+
+### Action Pinning
+
+All GitHub Actions in `.github/workflows/` must be pinned to full SHA commits with a version comment:
+
+```yaml
+# Correct
+uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+# Incorrect
+uses: actions/checkout@v4
+```
+
+Dependabot (`.github/dependabot.yml`) will automatically open PRs when new action versions are available.
+
+### Python Dependency Pinning
+
+Python dependencies use a two-file pattern:
+
+- `requirements.in` - Source constraint files with version ranges (what you edit)
+- `requirements.txt` - Locked files with exact versions and hashes (what CI installs)
+
+To regenerate locked files after updating `.in` files:
+
+```bash
+./scripts/lock-requirements.sh
+```
+
+This requires [uv](https://github.com/astral-sh/uv) and PyPI access. The script runs `uv pip compile --generate-hashes` for all three requirement sets (`src/`, `src/backend/`, `src/e2e/`).
+
+### Alembic Migration Heads
+
+The database migration history under `src/backend/alembic/versions/` must always
+have **exactly one head**. Two PRs that branch off the same Alembic tip and each
+add a sibling revision will leave `main` with multiple heads, and app startup
+will crash in `init_db` with `script directory has multiple heads`.
+
+CI enforces this via the **Alembic Single-Head Check** job in
+`.github/workflows/test-coverage.yml`. On every PR it runs
+`scripts/check-alembic-heads.py`, which:
+
+1. Loads the PR's `versions/` tree and fails if `alembic heads` returns more
+   than one head.
+2. Fails if any newly added revision's `down_revision` is not reachable from
+   the PR base branch's tip — i.e. you forgot to rebase before authoring the
+   migration.
+
+**Remediation when the check fails:**
+
+- Rebase your branch onto the current base, drop your revision file, and
+  re-run `alembic revision -m '<message>'` so the new revision descends from
+  the live head.
+- Or, if a merge revision is the right call (your branch and another both
+  shipped migrations independently), run
+  `alembic merge -m 'merge heads' <head_a> <head_b>` and commit the resulting
+  file.
+
+**Escape hatch:** Apply the `alembic-branch` label to the PR to bypass the
+check. Use this only when the multi-head state is intentional and a merge
+revision is planned in the same PR.
+
+### Workflow Permissions
+
+All workflows must declare a minimal `permissions` block at the workflow level:
+
+```yaml
+permissions:
+  contents: read
+```
+
+Only add additional permissions (e.g., `issues: write`) if the workflow genuinely requires them.
+
+---
+
+## Questions?
+
+- Open an issue for bugs or feature requests
+- Start a discussion for questions or ideas
+- Check existing issues before creating new ones
+
+Thank you for contributing to Ontos! 🎉
+

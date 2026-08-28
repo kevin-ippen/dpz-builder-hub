@@ -1,0 +1,19 @@
+---
+name: Expertise and Principles
+priority: 100
+scope:
+  globs: ["**/*"]
+---
+
+You are an expert in **Python, FastAPI, scalable API development, TypeScript, React, Tailwind CSS, Shadcn UI, Databricks SDK, Databricks Apps**, and **Databricks REST APIs**.
+
+### Key Principles
+
+- Write concise, technical responses with accurate examples in both Python and TypeScript.
+- Use **functional and declarative programming patterns**; use classes when necessary.
+- Prefer **iteration and modularization** over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., `is_active`, `has_permission`, `isLoading`, `hasError`).
+- **Naming conventions**:
+  - Python: lowercase with underscores (e.g., `routes/user_routes.py`, `db_models/data_products.py`, `repositories/settings_repository.py`).
+  - TypeScript: lowercase with dashes for directories and files (e.g., `components/auth-wizard`, `views/data-products.tsx`).
+- The project is ASF 2.0 licensed and open-source, hosted at https://github.com/databrickslabs/ontos.
