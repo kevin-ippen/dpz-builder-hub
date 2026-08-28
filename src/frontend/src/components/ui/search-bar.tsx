@@ -151,7 +151,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
           placeholder={placeholder}
           className={cn(
             "w-full",
-            variant === 'large' ? "h-12 text-lg" : "h-10"
+            variant === 'large' ? "h-12 text-base pl-4 pr-36 rounded-xl shadow-card" : "h-10 rounded-lg"
           )}
         />
         <div className="absolute right-0 top-0 h-full flex items-center gap-1 pr-2">
@@ -176,7 +176,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
       </div>
 
       {isOpen && (query.trim() || results.length > 0) && (
-        <Card className="absolute z-50 w-full mt-1 shadow-lg">
+        <Card className="absolute z-50 w-full mt-1.5 shadow-card-hover">
           <ScrollArea className="h-[300px]">
             {isLoading ? (
               <div className="flex items-center justify-center p-4 gap-2 text-muted-foreground">

@@ -68,12 +68,12 @@ export default function Home() {
         <>
           <div className="max-w-2xl mx-auto text-center mb-8">
             <div className="flex items-center justify-center mb-4">
-              <UnityCatalogLogo className="h-16 w-16" />
-              <h1 className="text-4xl font-bold ml-2">
+              <UnityCatalogLogo className="h-12 w-12" />
+              <h1 className="text-3xl md:text-4xl font-semibold tracking-tight ml-3">
                 {t('home:title', { appName })}
               </h1>
             </div>
-            <p className="text-lg text-muted-foreground mb-6">
+            <p className="text-base text-muted-foreground mb-6 max-w-xl mx-auto">
               {t('home:tagline')}
             </p>
             <div className="mb-8">
@@ -86,7 +86,7 @@ export default function Home() {
 
           {/* Overview Tiles */}
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4">{t('home:overview.title')}</h2>
+            <h2 className="text-lg font-semibold tracking-tight mb-4 text-foreground">{t('home:overview.title')}</h2>
             {permissionsLoading ? (
               <TileGridSkeleton count={8} columns={4} tileHeight="h-32" />
             ) : availableTiles.length > 0 ? (

@@ -45,13 +45,13 @@ export default function OverviewTile({
   children
 }: OverviewTileProps) {
   return (
-    <Card className="transition-colors h-full">
-      <CardContent className="p-6 flex flex-col justify-between h-full">
+    <Card className="transition-all duration-200 h-full hover:shadow-card-hover hover:border-primary/25">
+      <CardContent className="p-5 flex flex-col justify-between h-full">
         <div>
           {/* Icon, Title, and Value in one row */}
           <div className="flex items-center justify-between gap-1.5 sm:gap-2 md:gap-3">
             <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 flex-1 min-w-0">
-              <div className="h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 text-muted-foreground flex-shrink-0">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 [&>svg]:h-4 [&>svg]:w-4">
                 {icon}
               </div>
               <CardTitle className="text-[11px] sm:text-xs md:text-sm lg:text-base font-medium min-w-0 flex-1">
