@@ -59,7 +59,7 @@ function AssetCard({ asset, onInstall, heroUrl }: { asset: MarketplaceAsset; onI
 
   return (
     <Card
-      className="group relative overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer border"
+      className="group relative overflow-hidden shadow-card hover:shadow-card-hover hover:border-primary/25 hover:-translate-y-1 transition-all duration-200 cursor-pointer border rounded-xl"
       onClick={() => navigate(`/assets/${asset.id}`)}
     >
       {/* Hero image */}

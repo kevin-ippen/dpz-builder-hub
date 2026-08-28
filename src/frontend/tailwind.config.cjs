@@ -13,7 +13,14 @@ module.exports = {
   		}
   	},
   	extend: {
-  		colors: {
+  		fontFamily: {
+			sans: ['"DM Sans"', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+		},
+		boxShadow: {
+			card: '0 1px 2px hsl(210 24% 12% / 0.04), 0 8px 24px -12px hsl(210 24% 12% / 0.08)',
+			'card-hover': '0 1px 2px hsl(210 24% 12% / 0.05), 0 16px 32px -16px hsl(8 100% 40% / 0.18)',
+		},
+		colors: {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',

@@ -154,7 +154,7 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                     className={cn(
                       'flex items-center justify-center rounded-lg p-2 transition-colors',
                       isActive
-                        ? 'bg-muted text-primary'
+                        ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                     aria-label={translatedName}

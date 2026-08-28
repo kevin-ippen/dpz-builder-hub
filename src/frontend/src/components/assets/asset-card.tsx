@@ -70,7 +70,7 @@ export function AssetCard({
 
   return (
     <div
-      className="group bg-card border border-border rounded-xl overflow-hidden cursor-pointer transition-all hover:border-muted-foreground/40 hover:shadow-lg hover:-translate-y-1"
+      className="group bg-card border border-border rounded-xl overflow-hidden cursor-pointer transition-all duration-200 shadow-card hover:shadow-card-hover hover:border-primary/25 hover:-translate-y-1"
       onClick={() => navigate(`/assets/${id}`)}
     >
       {/* Hero visual — image or gradient fallback */}

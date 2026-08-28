@@ -20,7 +20,7 @@ export function Header({ onToggleSidebar, isSidebarCollapsed }: HeaderProps) {
   const navigate = useNavigate();
   
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-sidebar/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-sidebar/60">
+    <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border/80 bg-background/80 px-6 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
        {/* Sidebar Toggle Button */}
         <Button
             variant="ghost"
