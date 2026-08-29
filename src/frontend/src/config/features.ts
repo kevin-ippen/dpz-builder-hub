@@ -29,35 +29,13 @@ import {
     // ─── Discover ─── Find things to reuse, understand the landscape
     {
       id: 'assets',
-      name: 'Explore',
+      name: 'Catalog',
       path: '/assets',
       description: 'Browse all assets — filter by type, maturity, domain, and scope.',
       icon: Box,
       group: 'Discover',
       maturity: 'ga',
       showInLanding: true,
-    },
-    {
-      id: 'data-catalog',
-      name: 'Catalog',
-      path: '/data-catalog',
-      description: 'Unity Catalog assets — tables, views, endpoints with deep links.',
-      icon: BookOpen,
-      group: 'Discover',
-      maturity: 'ga',
-      showInLanding: true,
-    },
-
-    {
-      id: 'marketplace',
-      name: 'Marketplace',
-      path: '/marketplace',
-      description: 'Discover, adopt, and reuse certified components from across the org.',
-      icon: Store,
-      group: 'Discover',
-      maturity: 'ga',
-      showInLanding: true,
-      permissionId: 'assets',
     },
 
     // ─── Create ─── Contribute ideas, manage your portfolio

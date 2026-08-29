@@ -19,14 +19,13 @@ import './i18n/config'; // Initialize i18n
 
 // Import views
 import Home from './views/home';
-import DataCatalog from './views/data-catalog';
-import DataCatalogDetails from './views/data-catalog-details';
+// Data Catalog removed — merged into Catalog (asset-explorer)
 import About from './views/about';
 import UserGuide from './views/user-guide';
 import NotFound from './views/not-found';
 import SearchView from './views/search';
 
-import MarketplaceView from './views/marketplace';
+// Marketplace merged into Home
 
 // Consumer views
 import AssetExplorerView from './views/asset-explorer';
@@ -89,9 +88,9 @@ export default function App() {
               {/* Consumer: Discover */}
               <Route path="/assets" element={<AssetExplorerView />} />
               <Route path="/assets/:assetId" element={<AssetDetailView />} />
-              <Route path="/data-catalog" element={<DataCatalog />} />
-              <Route path="/data-catalog/*" element={<DataCatalogDetails />} />
-              <Route path="/marketplace" element={<MarketplaceView />} />
+              <Route path="/marketplace" element={<Navigate to="/" replace />} />
+              <Route path="/data-catalog" element={<Navigate to="/assets" replace />} />
+              <Route path="/data-catalog/*" element={<Navigate to="/assets" replace />} />
 
               {/* Consumer: Create */}
               <Route path="/submit" element={<SubmitAssetView />} />
