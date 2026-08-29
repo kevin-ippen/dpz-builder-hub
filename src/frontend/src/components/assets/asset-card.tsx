@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -64,6 +65,7 @@ export function AssetCard({
   id, name, description, typeName, maturity, publicationScope, owner, updatedAt, heroImageUrl,
 }: AssetCardProps) {
   const navigate = useNavigate();
+  const [heroError, setHeroError] = useState(false);
   const stage = maturity && MATURITY_CONFIG[maturity] ? maturity : 'idea';
   const config = MATURITY_CONFIG[stage];
   const stageIndex = MATURITY_ORDER.indexOf(stage);
@@ -75,12 +77,13 @@ export function AssetCard({
     >
       {/* Hero visual — image or gradient fallback */}
       <div className="relative h-[148px] overflow-hidden bg-gradient-to-br from-muted/60 to-muted">
-        {heroImageUrl ? (
+        {heroImageUrl && !heroError ? (
           <img
             src={heroImageUrl}
             alt={name}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             loading="lazy"
+            onError={() => setHeroError(true)}
           />
         ) : (
           <div className="flex items-end h-full p-4 bg-[radial-gradient(circle_at_80%_12%,rgba(68,98,201,0.15),transparent_36%),linear-gradient(145deg,hsl(var(--muted)),hsl(var(--card)))]">

@@ -16,13 +16,13 @@ export function UnityCatalogLogo({ className }: UnityCatalogLogoProps) {
   // Use custom logo if set and valid, otherwise fall back to default
   const logoSrc = customLogoUrl && !logoError 
     ? customLogoUrl 
-    : getAssetPath('/ontos-logo.svg');
+    : getAssetPath('/builder-hub-icon.png');
   
   return (
     <img
       className={cn('h-10 w-10 mr-2', className)}
       src={logoSrc}
-      alt="Unity Catalog Logo"
+      alt="DPZ Builder Hub"
       onError={() => {
         // Fall back to default logo if custom logo fails to load
         if (customLogoUrl) {

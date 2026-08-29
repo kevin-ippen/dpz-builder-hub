@@ -57,6 +57,7 @@ function StatCounter({ icon: Icon, value, label }: { icon: any; value: number; l
 
 function AssetCard({ asset, onInstall, heroUrl }: { asset: MarketplaceAsset; onInstall: (id: string) => void; heroUrl?: string }) {
   const navigate = useNavigate();
+  const [heroError, setHeroError] = useState(false);
   const config = MATURITY_CONFIG[asset.maturity] || MATURITY_CONFIG.idea;
 
   return (
@@ -66,8 +67,8 @@ function AssetCard({ asset, onInstall, heroUrl }: { asset: MarketplaceAsset; onI
     >
       {/* Hero image */}
       <div className="relative h-[120px] overflow-hidden bg-gradient-to-br from-muted/60 to-muted">
-        {heroUrl ? (
-          <img src={heroUrl} alt={asset.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
+        {heroUrl && !heroError ? (
+          <img src={heroUrl} alt={asset.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" onError={() => setHeroError(true)} />
         ) : (
           <div className="flex items-end h-full p-3 bg-[radial-gradient(circle_at_80%_12%,rgba(68,98,201,0.15),transparent_36%),linear-gradient(145deg,hsl(var(--muted)),hsl(var(--card)))]">
             <span className="text-[9px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">{asset.type_name}</span>
