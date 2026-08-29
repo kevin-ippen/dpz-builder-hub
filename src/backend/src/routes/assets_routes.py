@@ -905,6 +905,49 @@ def list_capabilities(db: DBSessionDep):
     } for r in result]}
 
 
+@dpz_router.post("/capabilities")
+def create_capability(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Create a new capability."""
+    import sqlalchemy as sa
+    cap_id = str(_uuid.uuid4())
+    # Get max sort_order
+    max_order = db.execute(sa.text("SELECT COALESCE(MAX(sort_order), 0) FROM capabilities")).scalar() or 0
+    db.execute(sa.text(
+        "INSERT INTO capabilities (id, slug, name, description, category, platform_feature, icon, sort_order) "
+        "VALUES (:id, :slug, :name, :desc, :cat, :pf, :icon, :order)"
+    ), {
+        "id": cap_id,
+        "slug": body.get("slug", ""),
+        "name": body.get("name", ""),
+        "desc": body.get("description", ""),
+        "cat": body.get("category", "platform"),
+        "pf": body.get("platform_feature", ""),
+        "icon": body.get("icon", ""),
+        "order": max_order + 1,
+    })
+    db.commit()
+    return {"id": cap_id, "status": "created"}
+
+
+@dpz_router.put("/capabilities/{cap_id}")
+def update_capability(cap_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Update a capability."""
+    import sqlalchemy as sa
+    allowed = ["name", "description", "category", "platform_feature", "icon", "sort_order"]
+    sets = []
+    params = {"id": cap_id}
+    for field in allowed:
+        if field in body:
+            sets.append(f"{field} = :{field}")
+            params[field] = body[field]
+    if not sets:
+        return {"status": "no_changes"}
+    sql = f"UPDATE capabilities SET {', '.join(sets)} WHERE id = :id"
+    db.execute(sa.text(sql), params)
+    db.commit()
+    return {"status": "updated"}
+
+
 @dpz_router.put("/wishlist/{item_id}/capabilities")
 def update_wish_capabilities(item_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
     """Set capabilities for a wishlist item. body: {capability_ids: [...]}"""
