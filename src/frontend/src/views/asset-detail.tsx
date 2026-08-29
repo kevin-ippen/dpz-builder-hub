@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, AlertCircle,
-  MapPin, Globe, Calendar, User, Tag, FileJson, GitBranch,
-  LayoutGrid, Share2,
+  MapPin, Globe, Calendar, User, Tag, FileJson,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,23 +15,17 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
-import { EntityTypeDefinition } from '@/types/ontology-schema';
 
-import { BusinessLineageGraph } from '@/components/common/business-lineage-graph';
 
-import { BusinessLineageView } from '@/components/lineage';
 
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { RelativeDate } from '@/components/common/relative-date';
-import { EntityTreePanel } from '@/components/common/entity-tree-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { CommentSidebar } from '@/components/comments';
 import { RatingPanel } from '@/components/ratings';
 
 
-import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
-import type { EntitySemanticLink } from '@/types/semantic-link';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
@@ -106,65 +99,32 @@ export default function AssetDetailView() {
   const [asset, setAsset] = useState<AssetRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
-  const [ontologyIri, setOntologyIri] = useState<string | null>(null);
-
-  const [relViewMode, setRelViewMode] = useState<'table' | 'graph'>('table');
-  const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
-  const [iriDialogOpen, setIriDialogOpen] = useState(false);
   const [evidenceSummary, setEvidenceSummary] = useState<any | null>(null);
 
-  const { get: apiGet, post: apiPost, delete: apiDelete } = useApi();
-  const { i18n } = useTranslation();
+  const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
-  const featureId = 'assets';
-  const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
-  const canAdmin = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.ADMIN);
-  const canEditSemanticLinks = !permissionsLoading && hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
 
   const entityType = asset?.asset_type_name || 'Asset';
 
-  const ontologyTypeName = useMemo(() => {
-    const typeMap: Record<string, string> = {
-      'Business Term': 'BusinessTerm',
-      'Logical Entity': 'LogicalEntity',
-      'Logical Attribute': 'LogicalAttribute',
-      'Delivery Channel': 'DeliveryChannel',
-      'Table': 'Table',
-      'View': 'View',
-      'Column': 'Column',
-      'ML Model': 'MLModel',
-      'API Endpoint': 'APIEndpoint',
-    };
-    return typeMap[entityType] || entityType.replace(/\s+/g, '');
-  }, [entityType]);
 
-  const showLineageTab = true;
-
-  const isBusinessTerm = ontologyTypeName === 'BusinessTerm';
-  const isPolicy = ontologyTypeName === 'Policy';
-  const isLogicalEntity = ontologyTypeName === 'LogicalEntity';
 
   const fetchAsset = useCallback(async () => {
     if (!assetId) return;
     setLoading(true);
     setError(null);
     try {
-      const [assetRes, linksRes, evidenceRes] = await Promise.all([
+      const [assetRes, evidenceRes] = await Promise.all([
         apiGet<AssetRead>(`/api/assets/${assetId}`),
-        apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`),
         apiGet<any>(`/api/dpz/evidence`),
       ]);
       if (assetRes.error) throw new Error(assetRes.error);
       const assetData = assetRes.data ?? null;
       setAsset(assetData);
-      setSemanticLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
       if (assetData && Array.isArray(evidenceRes.data?.items)) {
         setEvidenceSummary(evidenceRes.data.items.find((x: any) => x.id === assetData.id) ?? null);
       }
@@ -179,56 +139,13 @@ export default function AssetDetailView() {
     fetchAsset();
   }, [fetchAsset]);
 
-  const addSemanticLink = useCallback(async (iri: string) => {
-    if (!assetId) return;
-    try {
-      const res = await apiPost<EntitySemanticLink>(`/api/semantic-links/`, {
-        entity_id: assetId,
-        entity_type: 'asset',
-        iri,
-      });
-      if (res.error) throw new Error(res.error);
-      // Optimistically refresh just the links rather than re-loading the whole asset
-      const refreshed = await apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`);
-      setSemanticLinks(Array.isArray(refreshed.data) ? refreshed.data : []);
-      setIriDialogOpen(false);
-      toast({ title: 'Linked', description: 'Concept linked to asset.' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to link concept', variant: 'destructive' });
-    }
-  }, [assetId, apiPost, apiGet, toast]);
-
-  const removeSemanticLink = useCallback(async (linkId: string) => {
-    if (!assetId) return;
-    try {
-      const res = await apiDelete(`/api/semantic-links/${linkId}`);
-      if (res.error) throw new Error(res.error);
-      const refreshed = await apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`);
-      setSemanticLinks(Array.isArray(refreshed.data) ? refreshed.data : []);
-      toast({ title: 'Removed', description: 'Concept link removed.' });
-    } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to remove link', variant: 'destructive' });
-    }
-  }, [assetId, apiDelete, apiGet, toast]);
-
   useEffect(() => {
     if (asset) {
       setStaticSegments([
-        { label: 'Asset Explorer', path: '/assets' },
+        { label: 'Catalog', path: '/assets' },
       ]);
       setDynamicTitle(asset.name);
-      // Resolve ontology IRI for the asset type
-      (async () => {
-        try {
-          const resp = await apiGet<EntityTypeDefinition[]>(`/api/ontology/entity-types?tier=asset&lang=${encodeURIComponent(i18n.language)}`);
-          if (!resp.error && Array.isArray(resp.data)) {
-            const match = resp.data.find(
-              (t) => t.label === asset.asset_type_name || t.local_name === asset.asset_type_name
-            );
-            setOntologyIri(match?.iri ?? null);
-          }
-        } catch { /* non-critical */ }
-      })();
+
     }
     return () => { setStaticSegments([]); setDynamicTitle(null); };
   }, [asset, setStaticSegments, setDynamicTitle]);
@@ -236,7 +153,7 @@ export default function AssetDetailView() {
   if (loading) {
     // Asset Detail uses a tabbed layout (Overview / Relationships / Lineage /
     // Impact) above a hero title row. Match that structure.
-    return <TabsDetailSkeleton tabs={4} actionButtons={5} contentVariant="two-col" />;
+    return <TabsDetailSkeleton tabs={1} actionButtons={2} contentVariant="two-col" />;
   }
 
   if (error || !asset) {
@@ -332,13 +249,7 @@ export default function AssetDetailView() {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="relationships">Relationships</TabsTrigger>
-          {showLineageTab && (
-            <TabsTrigger value="lineage">
-              <GitBranch className="mr-1 h-3.5 w-3.5" />
-              Lineage
-            </TabsTrigger>
-          )}
+
 
         </TabsList>
 
@@ -424,167 +335,15 @@ export default function AssetDetailView() {
                 </>
               )}
 
-              {/* Linked Business Concepts */}
-              {(semanticLinks.length > 0 || canEditSemanticLinks) && (
-                <>
-                  <Separator className="my-4" />
-                  <div>
-                    <Label className="text-xs text-muted-foreground mb-2 block">Linked Business Concepts</Label>
-                    <LinkedConceptChips
-                      links={semanticLinks}
-                      onRemove={undefined}
-                      trailing={undefined}
-                    />
-                  </div>
-                </>
-              )}
+
             </CardContent>
           </Card>
 
-          {/* Type-specific: BusinessTerm - Definition & Synonyms */}
-          {isBusinessTerm && asset.properties && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Business Definition</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {asset.properties.definition && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Definition</Label>
-                    <p className="text-sm mt-1">{asset.properties.definition}</p>
-                  </div>
-                )}
-                {asset.properties.synonyms && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Synonyms</Label>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {String(asset.properties.synonyms).split(',').map((s) => (
-                        <Badge key={s.trim()} variant="secondary" className="text-xs">{s.trim()}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {asset.properties.examples && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Examples</Label>
-                    <p className="text-sm mt-1 text-muted-foreground">{asset.properties.examples}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {/* Properties */}
+          <PropertiesCard properties={asset.properties} />
 
-          {/* Type-specific: LogicalEntity - Domain & Supertype */}
-          {isLogicalEntity && asset.properties && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Logical Model</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {asset.properties.entityDomain && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Domain</Label>
-                    <p className="text-sm mt-1">{asset.properties.entityDomain}</p>
-                  </div>
-                )}
-                {asset.properties.entitySupertype && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Supertype</Label>
-                    <p className="text-sm mt-1">{asset.properties.entitySupertype}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
-          {/* Type-specific: Policy - Type & Enforcement */}
-          {isPolicy && asset.properties && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Policy Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {asset.properties.policyType && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Policy Type</Label>
-                    <Badge variant="outline" className="ml-2">{asset.properties.policyType}</Badge>
-                  </div>
-                )}
-                {asset.properties.enforcementLevel && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Enforcement</Label>
-                    <Badge variant="outline" className="ml-2">{asset.properties.enforcementLevel}</Badge>
-                  </div>
-                )}
-                {asset.properties.policyContent && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Content</Label>
-                    <p className="text-sm mt-1 whitespace-pre-wrap">{asset.properties.policyContent}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Properties (non-type-specific fields) */}
-          {!isBusinessTerm && <PropertiesCard properties={asset.properties} />}
-
-          {/* Quick relationship summary on overview */}
-          <EntityTreePanel
-            entityType={ontologyTypeName}
-            entityId={asset.id}
-            title="Relationships"
-            canEdit={false}
-          />
         </TabsContent>
-
-        <TabsContent value="relationships" className="mt-4 space-y-3">
-          <div className="flex items-center gap-1">
-            <Button
-              variant={relViewMode === 'table' ? 'default' : 'outline'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setRelViewMode('table')}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={relViewMode === 'graph' ? 'default' : 'outline'}
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setRelViewMode('graph')}
-            >
-              <Share2 className="h-4 w-4" />
-            </Button>
-          </div>
-          {relViewMode === 'table' ? (
-            <EntityTreePanel
-              entityType={ontologyTypeName}
-              entityId={asset.id}
-              title="All Entity Relationships"
-              canEdit={false}
-            />
-          ) : (
-            <BusinessLineageGraph
-              entityType={ontologyTypeName}
-              entityId={asset.id}
-              entityName={asset.name}
-              className="h-[600px]"
-              source="relationships"
-            />
-          )}
-        </TabsContent>
-
-        {showLineageTab && (
-          <TabsContent value="lineage" className="mt-4">
-            <BusinessLineageView
-              entityType={ontologyTypeName}
-              entityId={asset.id}
-              className="h-[600px]"
-            />
-          </TabsContent>
-        )}
-
 
       </Tabs>
 
@@ -642,21 +401,7 @@ export default function AssetDetailView() {
           currentAssetId={asset.id}
         />
 
-        {/* Key metadata */}
-        <div className="rounded-xl border p-4 space-y-3">
-          <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Metadata</h3>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[13px]">
-            {asset.created_by && (
-              <><dt className="text-[10px] font-mono uppercase text-muted-foreground pt-0.5">Owner</dt><dd className="truncate">{asset.created_by}</dd></>
-            )}
-            <dt className="text-[10px] font-mono uppercase text-muted-foreground pt-0.5">Type</dt>
-            <dd>{asset.asset_type_name}</dd>
-            <dt className="text-[10px] font-mono uppercase text-muted-foreground pt-0.5">Created</dt>
-            <dd><RelativeDate date={asset.created_at} /></dd>
-            <dt className="text-[10px] font-mono uppercase text-muted-foreground pt-0.5">Updated</dt>
-            <dd><RelativeDate date={asset.updated_at} /></dd>
-          </dl>
-        </div>
+
 
 
       </aside>

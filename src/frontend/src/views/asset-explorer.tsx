@@ -488,7 +488,7 @@ export default function AssetExplorerView() {
       <div className="mb-6">
         <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground mb-2 flex items-center gap-2">
           <span className="w-4 h-px bg-primary inline-block" />
-          Asset Explorer
+          Catalog
         </p>
         <h1 className="text-2xl font-bold tracking-tight mb-1">
           {totalAssetCount} assets across {visibleAssetTypes.length} types

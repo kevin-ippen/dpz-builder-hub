@@ -106,7 +106,7 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                   className={cn(
                     'flex items-center justify-center rounded-lg p-2 transition-colors',
                     location.pathname === homeLink.path
-                      ? 'bg-muted text-primary'
+                      ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                   aria-label={homeLink.name}
@@ -131,7 +131,7 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                 cn(
                   'flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
                   navIsActive
-                    ? 'bg-muted text-primary'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )
               }
@@ -208,15 +208,8 @@ export function Navigation({ isCollapsed }: NavigationProps) {
               </NavLink>
             );
           })}
-          {/* Grouped Navigation */}
-          {navigationGroups.map((group) => (
-            <div key={group.name} className={cn("w-full", isCollapsed ? "" : "mb-2 last:mb-0")}>
-              {!isCollapsed && group.items.length > 0 && (
-                <h2 className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {translateGroupName(group.name)}
-                </h2>
-              )}
-              {group.items.map((item: FeatureConfig) => {
+          {/* Flat navigation — no group headers */}
+          {navigationGroups.flatMap((group) => group.items).map((item: FeatureConfig) => {
                 const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
                 const translatedName = translateFeatureName(item.id, item.name);
 
@@ -229,40 +222,40 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                         className={cn(
                           'flex items-center justify-center rounded-lg p-2 transition-colors',
                           isActive
-                            ? 'bg-muted text-primary'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                        aria-label={translatedName}
-                        asChild
-                      >
-                        <NavLink to={item.path}>
-                          <item.icon className="h-5 w-5" />
-                          <span className="sr-only">{translatedName}</span>
-                        </NavLink>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      {translatedName}
-                      {item.maturity !== 'ga' && (
-                        <sup className={cn(
-                          "ml-1 text-[10px] font-bold px-1 py-0.5 rounded whitespace-nowrap",
-                          item.maturity === 'beta' ? "bg-yellow-500/20 text-yellow-700 dark:bg-yellow-500/30 dark:text-yellow-400" : "",
-                          item.maturity === 'alpha' ? "bg-purple-500/20 text-purple-700 dark:bg-purple-500/30 dark:text-purple-400" : ""
-                        )}>
-                          {item.maturity === 'beta' ? 'β' : 'α'}
-                        </sup>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    className={({ isActive: navIsActive }) =>
-                      cn(
-                        'flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
-                        navIsActive
-                          ? 'bg-muted text-primary'
+                            ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                    aria-label={translatedName}
+                    asChild
+                  >
+                    <NavLink to={item.path}>
+                      <item.icon className="h-5 w-5" />
+                      <span className="sr-only">{translatedName}</span>
+                    </NavLink>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {translatedName}
+                  {item.maturity !== 'ga' && (
+                    <sup className={cn(
+                      "ml-1 text-[10px] font-bold px-1 py-0.5 rounded whitespace-nowrap",
+                      item.maturity === 'beta' ? "bg-yellow-500/20 text-yellow-700 dark:bg-yellow-500/30 dark:text-yellow-400" : "",
+                      item.maturity === 'alpha' ? "bg-purple-500/20 text-purple-700 dark:bg-purple-500/30 dark:text-purple-400" : ""
+                    )}>
+                      {item.maturity === 'beta' ? 'β' : 'α'}
+                    </sup>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive: navIsActive }) =>
+                  cn(
+                    'flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
+                    navIsActive
+                      ? 'bg-primary/10 text-primary'
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       )
                     }
@@ -282,9 +275,7 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                     </span>
                   </NavLink>
                 );
-              })}
-            </div>
-          ))}
+          })}
         </nav>
       </TooltipProvider>
     </ScrollArea>

@@ -294,6 +294,16 @@ export default function Home() {
           )}
         </>
       )}
+
+      {/* Browse all CTA */}
+      {!loading && (featured.length > 0 || trending.length > 0) && (
+        <div className="text-center pt-4 pb-2">
+          <Button variant="outline" size="lg" className="rounded-xl" onClick={() => navigate('/assets')}>
+            Browse full catalog
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
