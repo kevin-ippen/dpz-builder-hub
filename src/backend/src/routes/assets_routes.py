@@ -734,42 +734,88 @@ def find_similar_assets(body: dict, current_user: CurrentUserDep):
         return {"matches": [], "status": "error", "detail": str(e)}
 
 
-@dpz_router.get("/demands")
-def list_demands(db: DBSessionDep, current_user: CurrentUserDep):
-    """List all demands (need signals)."""
+@dpz_router.get("/wishlist")
+def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
+    """List all wishlist items (need signals)."""
     import sqlalchemy as sa
     result = db.execute(sa.text(
-        "SELECT id, title, description, requester, status, priority, created_at "
-        "FROM demands ORDER BY created_at DESC"
+        "SELECT id, title, description, created_by, status, priority, category, "
+        "upvotes, signals_count, domain, linked_asset_id, created_at "
+        "FROM demands ORDER BY upvotes DESC, created_at DESC"
     ))
     items = []
     for row in result:
         items.append({
             "id": str(row[0]), "title": row[1], "description": row[2],
-            "requester": row[3], "status": row[4], "priority": row[5],
-            "created_at": row[6].isoformat() if row[6] else None,
+            "created_by": row[3], "status": row[4], "priority": row[5],
+            "category": row[6], "upvotes": row[7], "signals_count": row[8],
+            "domain": row[9],
+            "linked_asset_id": str(row[10]) if row[10] else None,
+            "created_at": row[11].isoformat() if row[11] else None,
         })
     return {"items": items, "total": len(items)}
 
 
-@dpz_router.post("/demands")
-def create_demand(demand_in: dict, db: DBSessionDep, current_user: CurrentUserDep):
-    """Submit a new demand signal."""
+# Keep old route as alias
+@dpz_router.get("/demands")
+def list_demands(db: DBSessionDep, current_user: CurrentUserDep):
+    return list_wishlist(db, current_user)
+
+
+@dpz_router.post("/wishlist")
+def create_wishlist_item(demand_in: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Submit a new wishlist item."""
     import sqlalchemy as sa
     demand_id = str(_uuid.uuid4())
     user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'unknown')
     db.execute(sa.text(
-        "INSERT INTO demands (id, title, description, requester, status, priority) "
-        "VALUES (:id, :title, :desc, :req, 'open', :pri)"
+        "INSERT INTO demands (id, title, description, created_by, status, priority, category, domain) "
+        "VALUES (:id, :title, :desc, :by, 'open', :pri, :cat, :cat)"
     ), {
         "id": demand_id,
         "title": demand_in.get("title", "Untitled"),
         "desc": demand_in.get("description"),
-        "req": user_email,
+        "by": user_email,
         "pri": demand_in.get("priority", "medium"),
+        "cat": demand_in.get("category"),
     })
     db.commit()
     return {"id": demand_id, "status": "created"}
+
+
+@dpz_router.post("/wishlist/{item_id}/upvote")
+def upvote_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserDep):
+    """Upvote a wishlist item."""
+    import sqlalchemy as sa
+    db.execute(sa.text(
+        "UPDATE demands SET upvotes = upvotes + 1, signals_count = signals_count + 1 WHERE id = :id"
+    ), {"id": item_id})
+    db.commit()
+    return {"status": "upvoted"}
+
+
+@dpz_router.get("/portfolio/my-assets")
+def get_my_assets(db: DBSessionDep, current_user: CurrentUserDep):
+    """Get all assets created by the current user."""
+    import sqlalchemy as sa
+    user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'unknown')
+    result = db.execute(sa.text(
+        "SELECT a.id, a.name, at.name as type_name, at.category, a.maturity, "
+        "a.install_count, a.publication_scope, a.operational_health, a.created_at, a.updated_at, a.description "
+        "FROM assets a JOIN asset_types at ON a.asset_type_id = at.id "
+        "WHERE a.created_by = :email ORDER BY a.updated_at DESC"
+    ), {"email": user_email})
+    items = []
+    for r in result:
+        items.append({
+            "id": str(r[0]), "name": r[1], "type_name": r[2], "category": r[3],
+            "maturity": r[4], "install_count": r[5], "scope": r[6],
+            "health": r[7] or "unknown",
+            "created_at": r[8].isoformat() if r[8] else None,
+            "updated_at": r[9].isoformat() if r[9] else None,
+            "description": r[10],
+        })
+    return {"items": items, "total": len(items), "user": user_email}
 
 
 @dpz_router.get("/portfolio")

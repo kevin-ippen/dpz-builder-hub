@@ -33,7 +33,7 @@ import AssetDetailView from './views/asset-detail';
 import LabView from './views/lab';
 import SubmitAssetView from './views/submit-asset';
 import MyPortfolioView from './views/my-portfolio';
-import DemandsView from './views/demands';
+import WishlistView from './views/demands';
 import DashboardView from './views/dashboard';
 
 
@@ -97,7 +97,8 @@ export default function App() {
               {/* Consumer: Create */}
               <Route path="/submit" element={<SubmitAssetView />} />
               <Route path="/my-portfolio" element={<MyPortfolioView />} />
-              <Route path="/demands" element={<DemandsView />} />
+              <Route path="/wishlist" element={<WishlistView />} />
+              <Route path="/demands" element={<Navigate to="/wishlist" replace />} />
 
               {/* Consumer: Observe */}
               <Route path="/dashboard" element={<DashboardView />} />

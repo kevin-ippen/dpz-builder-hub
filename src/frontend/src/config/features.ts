@@ -72,9 +72,9 @@ import {
     },
     {
       id: 'my-requests',
-      name: 'Demands',
-      path: '/demands',
-      description: 'Evidence of need — "I need X" signals that get matched to existing assets.',
+      name: 'Wishlist',
+      path: '/wishlist',
+      description: 'What the team needs next — upvote to signal demand.',
       icon: Target,
       group: 'Create',
       maturity: 'ga',
