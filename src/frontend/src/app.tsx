@@ -34,6 +34,7 @@ import LabView from './views/lab';
 import SubmitAssetView from './views/submit-asset';
 import MyPortfolioView from './views/my-portfolio';
 import WishlistView from './views/demands';
+import WishDetailView from './views/wish-detail';
 import DashboardView from './views/dashboard';
 
 
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="/submit" element={<SubmitAssetView />} />
               <Route path="/my-portfolio" element={<MyPortfolioView />} />
               <Route path="/wishlist" element={<WishlistView />} />
+              <Route path="/wishlist/:wishId" element={<WishDetailView />} />
               <Route path="/demands" element={<Navigate to="/wishlist" replace />} />
 
               {/* Consumer: Observe */}

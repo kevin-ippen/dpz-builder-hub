@@ -32,6 +32,7 @@ interface WishlistItem {
   signals_count: number;
   linked_asset_id?: string;
   created_at?: string;
+  capabilities?: { name: string; slug: string; icon: string }[];
 }
 
 const PRIORITY_BADGE: Record<string, { label: string; color: string }> = {
@@ -274,12 +275,16 @@ export default function WishlistView() {
 }
 
 function WishCard({ item, rank, onUpvote }: { item: WishlistItem; rank?: number; onUpvote: (id: string) => void }) {
+  const navigate = useNavigate();
   const priBadge = PRIORITY_BADGE[item.priority] || PRIORITY_BADGE.medium;
   const statusBadge = STATUS_BADGE[item.status] || STATUS_BADGE.open;
   const StatusIcon = statusBadge.icon;
 
   return (
-    <Card className="group hover:shadow-card-hover hover:border-primary/20 transition-all">
+    <Card
+      className="group hover:shadow-card-hover hover:border-primary/20 transition-all cursor-pointer"
+      onClick={() => navigate(`/wishlist/${item.id}`)}
+    >
       <CardContent className="py-4 px-5 flex items-start gap-4">
         {/* Upvote column */}
         <button
@@ -320,6 +325,12 @@ function WishCard({ item, rank, onUpvote }: { item: WishlistItem; rank?: number;
             </Badge>
             {item.category && (
               <span className="text-[10px] font-mono text-muted-foreground">{item.category}</span>
+            )}
+            {item.capabilities && item.capabilities.length > 0 && (
+              <span className="text-[10px] font-mono text-muted-foreground/60">
+                {item.capabilities.slice(0, 3).map(c => c.name).join(' · ')}
+                {item.capabilities.length > 3 && ` +${item.capabilities.length - 3}`}
+              </span>
             )}
             <span className="text-[10px] text-muted-foreground ml-auto">
               {item.created_by}

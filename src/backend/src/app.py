@@ -201,6 +201,27 @@ async def startup_event():
                     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                     PRIMARY KEY (asset_id, demand_id))
             """))
+            # Capabilities reference + demand-capability links
+            _db.execute(sa.text("""
+                CREATE TABLE IF NOT EXISTS capabilities (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    slug VARCHAR NOT NULL UNIQUE, name VARCHAR NOT NULL,
+                    description TEXT, category VARCHAR NOT NULL,
+                    platform_feature VARCHAR, icon VARCHAR,
+                    sort_order INTEGER NOT NULL DEFAULT 0)
+            """))
+            _db.execute(sa.text("""
+                CREATE TABLE IF NOT EXISTS demand_capabilities (
+                    demand_id UUID NOT NULL REFERENCES demands(id) ON DELETE CASCADE,
+                    capability_id UUID NOT NULL REFERENCES capabilities(id) ON DELETE CASCADE,
+                    PRIMARY KEY (demand_id, capability_id))
+            """))
+            # Evolve demands table for wishlist
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'open'"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS priority VARCHAR DEFAULT 'medium'"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS category VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS upvotes INTEGER DEFAULT 1"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS linked_asset_id UUID"))
             # Marketplace tables
             _db.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS asset_versions (

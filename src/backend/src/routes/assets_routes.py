@@ -753,6 +753,20 @@ def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
             "linked_asset_id": str(row[10]) if row[10] else None,
             "created_at": row[11].isoformat() if row[11] else None,
         })
+    # Attach capability names to each item
+    if items:
+        all_caps = db.execute(sa.text(
+            "SELECT dc.demand_id, c.name, c.slug, c.icon "
+            "FROM demand_capabilities dc JOIN capabilities c ON dc.capability_id = c.id"
+        ))
+        cap_map: dict = {}
+        for r in all_caps:
+            did = str(r[0])
+            if did not in cap_map:
+                cap_map[did] = []
+            cap_map[did].append({"name": r[1], "slug": r[2], "icon": r[3]})
+        for item in items:
+            item["capabilities"] = cap_map.get(item["id"], [])
     return {"items": items, "total": len(items)}
 
 
@@ -792,6 +806,75 @@ def upvote_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUs
     ), {"id": item_id})
     db.commit()
     return {"status": "upvoted"}
+
+
+@dpz_router.get("/wishlist/{item_id}")
+def get_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserDep):
+    """Get a single wishlist item with its capabilities."""
+    import sqlalchemy as sa
+    row = db.execute(sa.text(
+        "SELECT id, title, description, created_by, status, priority, category, "
+        "upvotes, signals_count, domain, linked_asset_id, created_at, updated_at "
+        "FROM demands WHERE id = :id"
+    ), {"id": item_id}).fetchone()
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Wishlist item not found")
+    item = {
+        "id": str(row[0]), "title": row[1], "description": row[2],
+        "created_by": row[3], "status": row[4], "priority": row[5],
+        "category": row[6], "upvotes": row[7], "signals_count": row[8],
+        "domain": row[9], "linked_asset_id": str(row[10]) if row[10] else None,
+        "created_at": row[11].isoformat() if row[11] else None,
+        "updated_at": row[12].isoformat() if row[12] else None,
+    }
+    # Fetch linked capabilities
+    caps = db.execute(sa.text(
+        "SELECT c.id, c.slug, c.name, c.description, c.category, c.platform_feature, c.icon "
+        "FROM capabilities c JOIN demand_capabilities dc ON c.id = dc.capability_id "
+        "WHERE dc.demand_id = :did ORDER BY c.sort_order"
+    ), {"did": item_id})
+    item["capabilities"] = [{
+        "id": str(r[0]), "slug": r[1], "name": r[2], "description": r[3],
+        "category": r[4], "platform_feature": r[5], "icon": r[6],
+    } for r in caps]
+    # Fetch linked asset if present
+    if item["linked_asset_id"]:
+        asset = db.execute(sa.text(
+            "SELECT a.id, a.name, at.name as type_name FROM assets a "
+            "JOIN asset_types at ON a.asset_type_id = at.id WHERE a.id = :aid"
+        ), {"aid": item["linked_asset_id"]}).fetchone()
+        if asset:
+            item["linked_asset"] = {"id": str(asset[0]), "name": asset[1], "type_name": asset[2]}
+    return item
+
+
+@dpz_router.get("/capabilities")
+def list_capabilities(db: DBSessionDep):
+    """List all available capabilities."""
+    import sqlalchemy as sa
+    result = db.execute(sa.text(
+        "SELECT id, slug, name, description, category, platform_feature, icon, sort_order "
+        "FROM capabilities ORDER BY sort_order"
+    ))
+    return {"items": [{
+        "id": str(r[0]), "slug": r[1], "name": r[2], "description": r[3],
+        "category": r[4], "platform_feature": r[5], "icon": r[6], "sort_order": r[7],
+    } for r in result]}
+
+
+@dpz_router.put("/wishlist/{item_id}/capabilities")
+def update_wish_capabilities(item_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Set capabilities for a wishlist item. body: {capability_ids: [...]}"""
+    import sqlalchemy as sa
+    cap_ids = body.get("capability_ids", [])
+    db.execute(sa.text("DELETE FROM demand_capabilities WHERE demand_id = :did"), {"did": item_id})
+    for cid in cap_ids:
+        db.execute(sa.text(
+            "INSERT INTO demand_capabilities (demand_id, capability_id) VALUES (:did, :cid) ON CONFLICT DO NOTHING"
+        ), {"did": item_id, "cid": cid})
+    db.commit()
+    return {"status": "updated", "count": len(cap_ids)}
 
 
 @dpz_router.get("/portfolio/my-assets")

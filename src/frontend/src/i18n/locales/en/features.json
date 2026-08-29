@@ -24,8 +24,12 @@
     "description": "Your assets across all maturity stages — ideas through production."
   },
   "my-requests": {
-    "name": "Demands",
-    "description": "Evidence of need — signals matched against existing assets."
+    "name": "Wishlist",
+    "description": "What the team needs next — upvote to signal demand."
+  },
+  "lab": {
+    "name": "Lab",
+    "description": "Experimental builds, vibe projects, and community contributions."
   },
   "data-asset-reviews": {
     "name": "Reviews",
