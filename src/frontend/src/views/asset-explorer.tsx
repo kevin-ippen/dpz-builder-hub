@@ -5,7 +5,7 @@ import {
   Box, ChevronDown, MoreHorizontal, PlusCircle, AlertCircle, Trash2,
   Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain, Activity,
   Server, Shield, BookOpen, Database, FolderOpen, Shapes, FileSpreadsheet, FileInput,
-  LayoutGrid, List,
+  LayoutGrid, List, FlaskConical,
 } from 'lucide-react';
 import { SplitPaneSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
@@ -86,6 +86,7 @@ export default function AssetExplorerView() {
   const [heroImages, setHeroImages] = useState<Record<string, { image_url: string; caption?: string }>>({});
   const [maturityFilter, setMaturityFilter] = useState<string | null>(null);
   const [funnelCounts, setFunnelCounts] = useState<Record<string, number>>({});
+  const [showLabProjects, setShowLabProjects] = useState(false);
 
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -257,6 +258,12 @@ export default function AssetExplorerView() {
     () => visibleAssetTypes.reduce((sum, t) => sum + (t.asset_count || 0), 0),
     [visibleAssetTypes]
   );
+
+  const LAB_MATURITIES = ['idea', 'triaged', 'poc'];
+  const displayedAssets = useMemo(() => {
+    if (showLabProjects) return assets;
+    return assets.filter((a: any) => !LAB_MATURITIES.includes(a.maturity));
+  }, [assets, showLabProjects]);
 
   const openDeleteDialog = (id: string) => {
     if (!canAdmin) {
@@ -488,7 +495,7 @@ export default function AssetExplorerView() {
       <div className="mb-6">
         <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground mb-2 flex items-center gap-2">
           <span className="w-4 h-px bg-primary inline-block" />
-          Catalog
+          Explore
         </p>
         <h1 className="text-2xl font-bold tracking-tight mb-1">
           {totalAssetCount} assets across {visibleAssetTypes.length} types
@@ -523,14 +530,26 @@ export default function AssetExplorerView() {
             );
           })}
         </div>
-        {maturityFilter && (
-          <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {maturityFilter && (
             <Badge variant="secondary" className="text-xs gap-1">
               Filtered: {MATURITY_CONFIG[maturityFilter]?.label || maturityFilter}
               <button className="ml-1 hover:text-destructive" onClick={() => setMaturityFilter(null)}>×</button>
             </Badge>
-          </div>
-        )}
+          )}
+          <button
+            className={cn(
+              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono transition-colors border',
+              showLabProjects
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'text-muted-foreground hover:bg-muted border-transparent'
+            )}
+            onClick={() => setShowLabProjects(!showLabProjects)}
+          >
+            <FlaskConical className="h-3 w-3" />
+            {showLabProjects ? 'Showing Lab projects' : 'Include Lab projects'}
+          </button>
+        </div>
       </div>
 
       {componentError && (
@@ -670,7 +689,7 @@ export default function AssetExplorerView() {
             <CardContent>
               {viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {assets.map((asset) => (
+                  {displayedAssets.map((asset) => (
                     <AssetCard
                       key={asset.id}
                       id={asset.id}
@@ -684,7 +703,7 @@ export default function AssetExplorerView() {
                       heroImageUrl={heroImages[asset.id]?.image_url}
                     />
                   ))}
-                  {assets.length === 0 && !assetsLoading && (
+                  {displayedAssets.length === 0 && !assetsLoading && (
                     <div className="col-span-full text-center py-12 text-muted-foreground">No assets found.</div>
                   )}
                 </div>
@@ -692,7 +711,7 @@ export default function AssetExplorerView() {
                 <DataTable
                   isLoading={assetsLoading}
                   columns={columns}
-                  data={assets}
+                  data={displayedAssets}
                   searchColumn="name"
                   searchValue={nameFilter}
                   onSearchChange={setNameFilter}

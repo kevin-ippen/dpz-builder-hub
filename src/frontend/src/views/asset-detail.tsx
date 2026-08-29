@@ -142,7 +142,7 @@ export default function AssetDetailView() {
   useEffect(() => {
     if (asset) {
       setStaticSegments([
-        { label: 'Catalog', path: '/assets' },
+        { label: 'Explore', path: '/assets' },
       ]);
       setDynamicTitle(asset.name);
 

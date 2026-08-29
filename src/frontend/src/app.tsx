@@ -30,6 +30,7 @@ import SearchView from './views/search';
 // Consumer views
 import AssetExplorerView from './views/asset-explorer';
 import AssetDetailView from './views/asset-detail';
+import LabView from './views/lab';
 import SubmitAssetView from './views/submit-asset';
 import MyPortfolioView from './views/my-portfolio';
 import DemandsView from './views/demands';
@@ -88,6 +89,7 @@ export default function App() {
               {/* Consumer: Discover */}
               <Route path="/assets" element={<AssetExplorerView />} />
               <Route path="/assets/:assetId" element={<AssetDetailView />} />
+              <Route path="/lab" element={<LabView />} />
               <Route path="/marketplace" element={<Navigate to="/" replace />} />
               <Route path="/data-catalog" element={<Navigate to="/assets" replace />} />
               <Route path="/data-catalog/*" element={<Navigate to="/assets" replace />} />

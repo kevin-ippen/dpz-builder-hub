@@ -1,7 +1,6 @@
 import {
-    BookOpen,
     Box,
-    Store,
+    FlaskConical,
     Lightbulb,
     Briefcase,
     BarChart3,
@@ -29,13 +28,24 @@ import {
     // ─── Discover ─── Find things to reuse, understand the landscape
     {
       id: 'assets',
-      name: 'Catalog',
+      name: 'Explore',
       path: '/assets',
-      description: 'Browse all assets — filter by type, maturity, domain, and scope.',
+      description: 'Browse certified and production-ready assets — filter by type, maturity, and domain.',
       icon: Box,
       group: 'Discover',
       maturity: 'ga',
       showInLanding: true,
+    },
+    {
+      id: 'lab',
+      name: 'Lab',
+      path: '/lab',
+      description: 'Experimental builds, vibe projects, and community contributions — pre-production work.',
+      icon: FlaskConical,
+      group: 'Discover',
+      maturity: 'ga',
+      showInLanding: true,
+      permissionId: 'assets',
     },
 
     // ─── Create ─── Contribute ideas, manage your portfolio
