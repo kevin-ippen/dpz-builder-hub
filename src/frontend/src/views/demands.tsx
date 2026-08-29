@@ -65,8 +65,10 @@ export default function WishlistView() {
 
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [allCapabilities, setAllCapabilities] = useState<{ slug: string; name: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [capFilter, setCapFilter] = useState<string | null>(null);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -83,8 +85,15 @@ export default function WishlistView() {
   const fetchWishlist = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await apiGet<any>('/api/dpz/wishlist');
+      const [resp, capsResp] = await Promise.all([
+        apiGet<any>('/api/dpz/wishlist'),
+        apiGet<any>('/api/dpz/capabilities'),
+      ]);
       if (!resp.error) setItems(resp.data?.items ?? []);
+      if (!capsResp.error && capsResp.data?.items) {
+        // Dedupe caps that are actually used
+        setAllCapabilities(capsResp.data.items.map((c: any) => ({ slug: c.slug, name: c.name })));
+      }
     } catch {} finally { setLoading(false); }
   }, [apiGet]);
 
@@ -111,9 +120,12 @@ export default function WishlistView() {
     }
   };
 
-  const filtered = categoryFilter
+  const afterCategory = categoryFilter
     ? items.filter(i => i.category === categoryFilter)
     : items;
+  const filtered = capFilter
+    ? afterCategory.filter(i => i.capabilities?.some((c: any) => c.slug === capFilter))
+    : afterCategory;
 
   // Group: open first (sorted by upvotes), then in-review, then matched/closed
   const openItems = filtered.filter(i => i.status === 'open').sort((a, b) => b.upvotes - a.upvotes);
@@ -209,6 +221,36 @@ export default function WishlistView() {
           </button>
         ))}
       </div>
+
+      {/* Capability filter chips */}
+      {allCapabilities.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mr-1">Capabilities:</span>
+          <button
+            className={cn(
+              'px-2.5 py-1 rounded-full text-[10px] font-mono transition-colors border',
+              !capFilter ? 'bg-primary/10 text-primary border-primary/30' : 'hover:bg-muted border-transparent text-muted-foreground'
+            )}
+            onClick={() => setCapFilter(null)}
+          >
+            All
+          </button>
+          {allCapabilities.filter(c => items.some(i => i.capabilities?.some((ic: any) => ic.slug === c.slug))).map((c) => (
+            <button
+              key={c.slug}
+              className={cn(
+                'px-2.5 py-1 rounded-full text-[10px] font-mono transition-colors border',
+                capFilter === c.slug
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'hover:bg-muted border-transparent text-muted-foreground'
+              )}
+              onClick={() => setCapFilter(capFilter === c.slug ? null : c.slug)}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="grid gap-3">

@@ -1,12 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, TrendingUp, Activity, ShieldCheck, DollarSign, Clock3 } from 'lucide-react';
+import {
+  BarChart3, TrendingUp, Activity, ShieldCheck, Lightbulb,
+  FlaskConical, Package, ThumbsUp, ArrowRight, CheckCircle2,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApi } from '@/hooks/use-api';
 import { RelativeDate } from '@/components/common/relative-date';
+import { cn } from '@/lib/utils';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { MATURITY_CONFIG, MATURITY_ORDER } from '@/components/assets/asset-card';
 
 // ─── Types ───
 interface PortfolioData {
@@ -16,43 +22,39 @@ interface PortfolioData {
   by_scope: { scope: string; count: number }[];
   by_health: { health: string; count: number }[];
 }
-
 interface AdoptionData {
   recent_activity: { id: string; name: string; type_name: string; maturity: string; scope: string; updated_at: string }[];
   scope_distribution: { scope: string; count: number }[];
 }
-
-interface HealthItem {
-  id: string; name: string; type_name: string; health: string; maturity: string;
-}
-
+interface HealthItem { id: string; name: string; type_name: string; health: string; maturity: string; }
 interface EvidenceItem {
   id: string; name: string; type_name: string; maturity: string; health: string;
   total_signals: number; signal_types: number; last_signal_at: string | null; evidence_score: number;
 }
-
-interface HealthEvidenceData {
-  freshness: { bucket: string; count: number }[];
-  quality: { bucket: string; count: number }[];
-  cost: { bucket: string; count: number }[];
-}
-
-// ─── Constants ───
-const MATURITY_COLORS: Record<string, string> = {
-  production: 'bg-green-600', production_candidate: 'bg-purple-600',
-  validating: 'bg-blue-600', poc: 'bg-yellow-600',
-  triaged: 'bg-slate-600', idea: 'bg-slate-400', unset: 'bg-gray-300',
-};
+interface WishItem { id: string; title: string; status: string; priority: string; upvotes: number; category?: string; capabilities?: { name: string; slug: string }[]; }
+interface CapItem { slug: string; name: string; category: string; }
 
 const HEALTH_COLORS: Record<string, string> = {
-  healthy: 'bg-green-500', degraded: 'bg-yellow-500',
-  unknown: 'bg-gray-400', unsupported: 'bg-red-400', retired: 'bg-gray-600',
+  healthy: 'text-green-500', degraded: 'text-amber-500', unknown: 'text-muted-foreground',
+};
+const HEALTH_BG: Record<string, string> = {
+  healthy: 'bg-green-500', degraded: 'bg-amber-500', unknown: 'bg-gray-400',
 };
 
-const HEALTH_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  healthy: 'default', degraded: 'destructive', unknown: 'outline',
-  unsupported: 'destructive', retired: 'secondary',
-};
+function StatCard({ label, value, sub, icon: Icon }: { label: string; value: string | number; sub?: string; icon: any }) {
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Icon className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</span>
+        </div>
+        <div className="text-2xl font-semibold tracking-tight">{value}</div>
+        {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function DashboardView() {
   const navigate = useNavigate();
@@ -64,7 +66,8 @@ export default function DashboardView() {
   const [adoption, setAdoption] = useState<AdoptionData | null>(null);
   const [health, setHealth] = useState<HealthItem[]>([]);
   const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
-  const [healthEvidence, setHealthEvidence] = useState<HealthEvidenceData | null>(null);
+  const [wishlist, setWishlist] = useState<WishItem[]>([]);
+  const [capabilities, setCapabilities] = useState<CapItem[]>([]);
 
   useEffect(() => {
     setStaticSegments([]); setDynamicTitle('Dashboard');
@@ -73,83 +76,113 @@ export default function DashboardView() {
 
   useEffect(() => {
     (async () => {
-      const [pResp, aResp, hResp, eResp, heResp] = await Promise.all([
+      const [pR, aR, hR, eR, wR, cR] = await Promise.all([
         apiGet<PortfolioData>('/api/dpz/portfolio'),
         apiGet<AdoptionData>('/api/dpz/adoption'),
         apiGet<any>('/api/dpz/health'),
         apiGet<any>('/api/dpz/evidence'),
-        apiGet<HealthEvidenceData>('/api/dpz/health-evidence'),
+        apiGet<any>('/api/dpz/wishlist'),
+        apiGet<any>('/api/dpz/capabilities'),
       ]);
-      if (!pResp.error && pResp.data) setPortfolio(pResp.data);
-      if (!aResp.error && aResp.data) setAdoption(aResp.data);
-      if (!hResp.error && hResp.data) setHealth(hResp.data.items ?? []);
-      if (!eResp.error && eResp.data) setEvidence(eResp.data.items ?? []);
-      if (!heResp.error && heResp.data) setHealthEvidence(heResp.data);
+      if (!pR.error && pR.data) setPortfolio(pR.data);
+      if (!aR.error && aR.data) setAdoption(aR.data);
+      if (!hR.error && hR.data) setHealth(hR.data.items ?? []);
+      if (!eR.error && eR.data) setEvidence(eR.data.items ?? []);
+      if (!wR.error && wR.data?.items) setWishlist(wR.data.items);
+      if (!cR.error && cR.data?.items) setCapabilities(cR.data.items);
     })();
   }, [apiGet]);
 
-  // Group health items
+  // Derived stats
+  const prodCount = useMemo(() => portfolio?.by_maturity.find(m => m.stage === 'production')?.count || 0, [portfolio]);
+  const labCount = useMemo(() => {
+    const labStages = ['idea', 'triaged', 'poc'];
+    return portfolio?.by_maturity.filter(m => labStages.includes(m.stage)).reduce((s, m) => s + m.count, 0) || 0;
+  }, [portfolio]);
+  const openWishes = useMemo(() => wishlist.filter(w => w.status === 'open').length, [wishlist]);
+  const totalUpvotes = useMemo(() => wishlist.reduce((s, w) => s + w.upvotes, 0), [wishlist]);
+
+  // Capability coverage: how many wishes need each capability
+  const capCoverage = useMemo(() => {
+    const counts: Record<string, number> = {};
+    wishlist.forEach(w => {
+      w.capabilities?.forEach((c: any) => {
+        counts[c.slug] = (counts[c.slug] || 0) + 1;
+      });
+    });
+    return capabilities
+      .map(c => ({ ...c, demand_count: counts[c.slug] || 0 }))
+      .filter(c => c.demand_count > 0)
+      .sort((a, b) => b.demand_count - a.demand_count);
+  }, [wishlist, capabilities]);
+
+  // Health grouped
   const healthGrouped = health.reduce<Record<string, HealthItem[]>>((acc, item) => {
     if (!acc[item.health]) acc[item.health] = [];
     acc[item.health].push(item);
     return acc;
   }, {});
-  const healthOrder = ['healthy', 'degraded', 'unknown', 'unsupported', 'retired'];
-  const orderedHealthGroups = healthOrder.filter(h => healthGrouped[h]?.length > 0);
 
   return (
-    <div className="py-6 space-y-6 max-w-5xl mx-auto">
+    <div className="py-6 space-y-8">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <BarChart3 className="h-6 w-6 text-primary" />
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground mb-2 flex items-center gap-2"><span className="w-4 h-px bg-primary inline-block" />Observe</p>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            {portfolio ? `${portfolio.total} assets` : 'Loading...'} — portfolio health, adoption, and quality at a glance
-          </p>
-        </div>
+      <div>
+        <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground mb-1 flex items-center gap-2">
+          <span className="w-4 h-px bg-primary inline-block" />Dashboard
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">Portfolio Health & Demand</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {portfolio ? `${portfolio.total} assets` : 'Loading...'} across the organization
+        </p>
       </div>
+
+      {/* ═══ Top Stats ═══ */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Total Assets" value={portfolio?.total || 0} icon={Package} sub={`${prodCount} production`} />
+        <StatCard label="In Lab" value={labCount} icon={FlaskConical} sub="Pre-production" />
+        <StatCard label="Open Wishes" value={openWishes} icon={Lightbulb} sub={`${totalUpvotes} total upvotes`} />
+        <StatCard label="Evidence Score" value={evidence.length > 0 ? `${Math.round(evidence.reduce((s, e) => s + e.evidence_score, 0) / evidence.length)}%` : '—'} icon={ShieldCheck} sub="Avg across assets" />
+      </div>
+
+      {/* ═══ Maturity Pipeline ═══ */}
+      {portfolio && (
+        <div className="flex items-center gap-px bg-muted rounded-lg overflow-hidden border">
+          {MATURITY_ORDER.map(stage => {
+            const config = MATURITY_CONFIG[stage];
+            const count = portfolio.by_maturity.find(m => m.stage === stage)?.count || 0;
+            return (
+              <div key={stage} className="flex-1 py-2.5 px-2 text-center relative">
+                <div className="text-sm font-bold tracking-tight">{count}</div>
+                <div className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{config.label}</div>
+                {count > 0 && <div className={cn('absolute bottom-0 left-0 right-0 h-0.5', config.barColor)} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview" className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5" /> Overview
           </TabsTrigger>
-          <TabsTrigger value="activity" className="flex items-center gap-1.5">
-            <TrendingUp className="h-3.5 w-3.5" /> Activity
+          <TabsTrigger value="demand" className="flex items-center gap-1.5">
+            <Lightbulb className="h-3.5 w-3.5" /> Demand
           </TabsTrigger>
           <TabsTrigger value="health" className="flex items-center gap-1.5">
             <Activity className="h-3.5 w-3.5" /> Health
           </TabsTrigger>
-          <TabsTrigger value="evidence" className="flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5" /> Evidence
+          <TabsTrigger value="activity" className="flex items-center gap-1.5">
+            <TrendingUp className="h-3.5 w-3.5" /> Activity
           </TabsTrigger>
         </TabsList>
 
-        {/* ─── Overview Tab ─── */}
+        {/* ─── Overview ─── */}
         <TabsContent value="overview" className="pt-4">
           {!portfolio ? (
             <p className="text-center text-muted-foreground py-8">Loading...</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">By Maturity</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {portfolio.by_maturity.map(m => (
-                      <div key={m.stage} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${MATURITY_COLORS[m.stage] || 'bg-gray-400'}`} />
-                          <span className="text-sm">{m.stage}</span>
-                        </div>
-                        <Badge variant="secondary">{m.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">By Type</CardTitle></CardHeader>
                 <CardContent>
@@ -157,13 +190,12 @@ export default function DashboardView() {
                     {portfolio.by_type.map(t => (
                       <div key={t.type} className="flex items-center justify-between">
                         <span className="text-sm">{t.type}</span>
-                        <Badge variant="secondary">{t.count}</Badge>
+                        <Badge variant="secondary" className="font-mono text-[10px]">{t.count}</Badge>
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
-
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Publication Scope</CardTitle></CardHeader>
                 <CardContent>
@@ -171,24 +203,23 @@ export default function DashboardView() {
                     {portfolio.by_scope.map(s => (
                       <div key={s.scope} className="flex items-center justify-between">
                         <span className="text-sm">{s.scope}</span>
-                        <Badge variant="secondary">{s.count}</Badge>
+                        <Badge variant="secondary" className="font-mono text-[10px]">{s.count}</Badge>
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Operational Health</CardTitle></CardHeader>
+              <Card className="md:col-span-2">
+                <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Evidence Coverage</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    {portfolio.by_health.map(h => (
-                      <div key={h.health} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${HEALTH_COLORS[h.health] || 'bg-gray-400'}`} />
-                          <span className="text-sm">{h.health}</span>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {evidence.slice(0, 8).map(e => (
+                      <div key={e.id} className="rounded-lg border p-3 hover:border-primary/20 transition-colors cursor-pointer" onClick={() => navigate(`/assets/${e.id}`)}>
+                        <p className="text-sm font-medium truncate">{e.name}</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[10px] text-muted-foreground font-mono">{e.total_signals} signals</span>
+                          <Badge variant={e.evidence_score >= 70 ? 'default' : 'secondary'} className="text-[9px] font-mono">{e.evidence_score}%</Badge>
                         </div>
-                        <Badge variant="secondary">{h.count}</Badge>
                       </div>
                     ))}
                   </div>
@@ -198,172 +229,169 @@ export default function DashboardView() {
           )}
         </TabsContent>
 
-        {/* ─── Activity Tab ─── */}
+        {/* ─── Demand (Wishlist + Capability Heatmap) ─── */}
+        <TabsContent value="demand" className="pt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Top Wishes by Demand</CardTitle>
+                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate('/wishlist')}>
+                      View all <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {wishlist.slice(0, 8).map((w, i) => (
+                      <button
+                        key={w.id}
+                        className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/50 hover:border-primary/20 transition-all group"
+                        onClick={() => navigate(`/wishlist/${w.id}`)}
+                      >
+                        <span className={cn('text-[10px] font-mono font-bold w-4 text-center shrink-0', i === 0 ? 'text-primary' : 'text-muted-foreground')}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{w.title}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {w.capabilities?.slice(0, 2).map((c: any) => (
+                              <span key={c.slug} className="text-[9px] font-mono text-muted-foreground">{c.name}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <ThumbsUp className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm font-bold">{w.upvotes}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Capability demand heatmap */}
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">
+                    Most Wanted Capabilities
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {capCoverage.length > 0 ? (
+                    <div className="space-y-2">
+                      {capCoverage.slice(0, 10).map(cap => (
+                        <div key={cap.slug} className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-medium truncate">{cap.name}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(cap.demand_count, 5) }).map((_, i) => (
+                              <div key={i} className="w-2 h-2 rounded-full bg-primary" />
+                            ))}
+                            {cap.demand_count > 5 && <span className="text-[9px] font-mono text-muted-foreground">+{cap.demand_count - 5}</span>}
+                          </div>
+                          <Badge variant="secondary" className="text-[9px] font-mono shrink-0">
+                            {cap.demand_count}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-muted-foreground py-4 text-center">No capability demand yet.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">
+                    Wish Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {[
+                    { status: 'open', label: 'Open', color: 'bg-blue-500' },
+                    { status: 'in-review', label: 'In Review', color: 'bg-purple-500' },
+                    { status: 'matched', label: 'Matched', color: 'bg-green-500' },
+                  ].map(({ status, label, color }) => {
+                    const count = wishlist.filter(w => w.status === status).length;
+                    return (
+                      <div key={status} className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          <div className={cn('w-2 h-2 rounded-full', color)} />
+                          <span className="text-[12px]">{label}</span>
+                        </div>
+                        <span className="text-[12px] font-mono font-bold">{count}</span>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ─── Health ─── */}
+        <TabsContent value="health" className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            {(['healthy', 'degraded', 'unknown'] as const).map(h => (
+              <Card key={h}>
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={cn('w-2.5 h-2.5 rounded-full', HEALTH_BG[h])} />
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{h}</span>
+                  </div>
+                  <div className="text-2xl font-semibold">{healthGrouped[h]?.length || 0}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {health.map(item => {
+              const hc = HEALTH_COLORS[item.health] || 'text-muted-foreground';
+              return (
+                <button
+                  key={item.id}
+                  className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/50 transition-all"
+                  onClick={() => navigate(`/assets/${item.id}`)}
+                >
+                  <CheckCircle2 className={cn('h-4 w-4 shrink-0', hc)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{item.type_name}</p>
+                  </div>
+                  <Badge variant="outline" className="text-[9px] font-mono">{item.health}</Badge>
+                </button>
+              );
+            })}
+          </div>
+        </TabsContent>
+
+        {/* ─── Activity ─── */}
         <TabsContent value="activity" className="pt-4">
           {!adoption ? (
             <p className="text-center text-muted-foreground py-8">Loading...</p>
           ) : (
-            <div className="space-y-4">
-              {/* Scope Distribution */}
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Scope Distribution</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="flex gap-3 flex-wrap">
-                    {adoption.scope_distribution.map(s => {
-                      const total = adoption.scope_distribution.reduce((sum, d) => sum + d.count, 0);
-                      return (
-                        <div key={s.scope} className="text-center px-4 py-2 rounded-lg bg-muted">
-                          <div className="text-2xl font-bold">{s.count}</div>
-                          <div className="text-xs text-muted-foreground">{s.scope}</div>
-                          <div className="text-xs text-muted-foreground">{total > 0 ? Math.round(s.count / total * 100) : 0}%</div>
-                        </div>
-                      );
-                    })}
+            <div className="space-y-2">
+              {adoption.recent_activity.map(a => (
+                <button
+                  key={a.id}
+                  className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/50 transition-all"
+                  onClick={() => navigate(`/assets/${a.id}`)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{a.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{a.type_name} · {a.maturity}</p>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Recent Activity */}
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Recent Activity</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="space-y-1">
-                    {adoption.recent_activity.map(a => (
-                      <div
-                        key={a.id}
-                        className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted cursor-pointer transition-colors"
-                        onClick={() => navigate(`/assets/${a.id}`)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{a.name}</span>
-                          <Badge variant="outline" className="text-xs">{a.type_name}</Badge>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {a.maturity && <Badge className="text-xs bg-blue-600 text-white">{a.maturity}</Badge>}
-                          {a.updated_at && <span className="text-xs text-muted-foreground"><RelativeDate date={a.updated_at} /></span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ─── Health Tab ─── */}
-        <TabsContent value="health" className="pt-4">
-          {health.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">Loading...</p>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Operational health grouped by support posture and lifecycle stage.</p>
-              {orderedHealthGroups.map(h => (
-                <Card key={h}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-2">
-                       <Badge variant={HEALTH_VARIANT[h] || 'outline'}>{h}</Badge>
-                       <span className="text-[10px] text-muted-foreground font-normal">
-                        {healthGrouped[h].length} asset{healthGrouped[h].length !== 1 ? 's' : ''}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-1">
-                      {healthGrouped[h].map(item => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted cursor-pointer"
-                          onClick={() => navigate(`/assets/${item.id}`)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{item.name}</span>
-                            <Badge variant="outline" className="text-xs">{item.type_name}</Badge>
-                          </div>
-                          {item.maturity && <Badge className="text-xs bg-blue-600 text-white">{item.maturity}</Badge>}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                  <span className="text-[11px] text-muted-foreground shrink-0">
+                    <RelativeDate date={a.updated_at} />
+                  </span>
+                </button>
               ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ─── Evidence Tab ─── */}
-        <TabsContent value="evidence" className="pt-4">
-          {!healthEvidence ? (
-            <p className="text-center text-muted-foreground py-8">Loading...</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-2"><Clock3 className="h-3.5 w-3.5 text-primary" /> Evidence Freshness</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {healthEvidence.freshness.map(f => (
-                        <div key={f.bucket} className="flex items-center justify-between">
-                          <span className="text-sm">{f.bucket}</span>
-                          <Badge variant="secondary">{f.count}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-primary" /> Quality Coverage</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {healthEvidence.quality.map(q => (
-                        <div key={q.bucket} className="flex items-center justify-between">
-                          <span className="text-sm">{q.bucket}</span>
-                          <Badge variant="secondary">{q.count}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-2"><DollarSign className="h-3.5 w-3.5 text-primary" /> Cost Visibility</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {healthEvidence.cost.map(c => (
-                        <div key={c.bucket} className="flex items-center justify-between">
-                          <span className="text-sm">{c.bucket}</span>
-                          <Badge variant="secondary">{c.count}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Evidence Leaderboard</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="space-y-1">
-                    {evidence.slice(0, 12).map(item => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted cursor-pointer transition-colors"
-                        onClick={() => navigate(`/assets/${item.id}`)}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-medium truncate">{item.name}</span>
-                          <Badge variant="outline" className="text-xs">{item.type_name}</Badge>
-                        </div>
-                        <div className="flex items-center gap-2 flex-none">
-                          <Badge variant={item.evidence_score >= 4 ? 'default' : item.evidence_score >= 2 ? 'secondary' : 'outline'} className="text-xs">{item.evidence_score}/5</Badge>
-                          <span className="text-xs text-muted-foreground">{item.signal_types} types</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           )}
         </TabsContent>

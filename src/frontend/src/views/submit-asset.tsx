@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lightbulb, ArrowRight, Sparkles, AlertTriangle } from 'lucide-react';
+import { Lightbulb, ArrowRight, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,8 @@ export default function SubmitAssetView() {
 
   const [assetTypes, setAssetTypes] = useState<AssetTypeOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [allCapabilities, setAllCapabilities] = useState<{ id: string; slug: string; name: string; category: string; description: string }[]>([]);
+  const [selectedCapIds, setSelectedCapIds] = useState<Set<string>>(new Set());
 
   // Anti-duplication: similar asset matches
   interface SimilarMatch {
@@ -44,6 +46,7 @@ export default function SubmitAssetView() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [assetTypeId, setAssetTypeId] = useState('');
+  const [maturity, setMaturity] = useState('idea');
   const [hypothesis, setHypothesis] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
   const [demoUrl, setDemoUrl] = useState('');
@@ -56,10 +59,12 @@ export default function SubmitAssetView() {
 
   useEffect(() => {
     (async () => {
-      const resp = await apiGet<AssetTypeOption[]>('/api/asset-types');
-      if (!resp.error && Array.isArray(resp.data)) {
-        setAssetTypes(resp.data);
-      }
+      const [typesResp, capsResp] = await Promise.all([
+        apiGet<AssetTypeOption[]>('/api/asset-types'),
+        apiGet<any>('/api/dpz/capabilities'),
+      ]);
+      if (!typesResp.error && Array.isArray(typesResp.data)) setAssetTypes(typesResp.data);
+      if (!capsResp.error && capsResp.data?.items) setAllCapabilities(capsResp.data.items);
     })();
   }, [apiGet]);
 
@@ -95,11 +100,13 @@ export default function SubmitAssetView() {
         name: name.trim(),
         description: description.trim() || undefined,
         asset_type_id: assetTypeId,
+        maturity,
         status: 'active',
         properties: {
           ...(hypothesis ? { value_hypothesis: hypothesis } : {}),
           ...(repoUrl ? { repo_url: repoUrl } : {}),
           ...(demoUrl ? { demo_url: demoUrl } : {}),
+          ...(selectedCapIds.size > 0 ? { capability_ids: Array.from(selectedCapIds) } : {}),
         },
       };
       const resp = await apiPost<any>('/api/assets', payload);
@@ -217,6 +224,49 @@ export default function SubmitAssetView() {
                     <Badge variant="secondary" className="text-xs">{Math.round(m.score * 100)}% match</Badge>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Maturity */}
+          <div className="space-y-2">
+            <Label>Starting Maturity</Label>
+            <Select value={maturity} onValueChange={setMaturity}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="idea">Idea — concept only, no code</SelectItem>
+                <SelectItem value="poc">POC — working prototype, no SLA</SelectItem>
+                <SelectItem value="validating">Validating — under active evaluation</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Capability Tags */}
+          {allCapabilities.length > 0 && (
+            <div className="space-y-2">
+              <Label>Capabilities Used</Label>
+              <p className="text-[11px] text-muted-foreground">What technical capabilities does this leverage?</p>
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto rounded-lg border p-2">
+                {allCapabilities.map(cap => {
+                  const active = selectedCapIds.has(cap.id);
+                  return (
+                    <button
+                      key={cap.id}
+                      type="button"
+                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors ${
+                        active ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground'
+                      }`}
+                      onClick={() => {
+                        const next = new Set(selectedCapIds);
+                        if (active) next.delete(cap.id); else next.add(cap.id);
+                        setSelectedCapIds(next);
+                      }}
+                    >
+                      {active ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <div className="w-3 h-3 rounded-full border shrink-0" />}
+                      <span className="truncate">{cap.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
