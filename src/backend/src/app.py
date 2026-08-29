@@ -222,6 +222,19 @@ async def startup_event():
             _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS category VARCHAR"))
             _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS upvotes INTEGER DEFAULT 1"))
             _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS linked_asset_id UUID"))
+            # Enterprise demand columns
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS business_justification TEXT"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS target_date DATE"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS estimated_effort VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS stakeholders JSONB DEFAULT '[]'::jsonb"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS uc_catalog VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS uc_schema VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS jira_key VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS jira_url VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS requested_by_team VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS budget_impact VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE demands ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ"))
             # Marketplace tables
             _db.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS asset_versions (
@@ -265,6 +278,28 @@ async def startup_event():
             _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS install_count INTEGER DEFAULT 0"))
             _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS latest_version VARCHAR"))
             _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS featured BOOLEAN DEFAULT false"))
+            # Enterprise governance columns
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS owner_email VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS team VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS domain VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS uc_catalog VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS uc_schema VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS uc_table VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS jira_key VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS jira_url VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS stakeholders JSONB DEFAULT '[]'::jsonb"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS business_impact TEXT"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS target_audience VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS slack_channel VARCHAR"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS sla_tier VARCHAR DEFAULT 'none'"))
+            _db.execute(sa.text("ALTER TABLE assets ADD COLUMN IF NOT EXISTS cost_center VARCHAR"))
+            # Asset capabilities join
+            _db.execute(sa.text("""
+                CREATE TABLE IF NOT EXISTS asset_capabilities (
+                    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+                    capability_id UUID NOT NULL REFERENCES capabilities(id) ON DELETE CASCADE,
+                    PRIMARY KEY (asset_id, capability_id))
+            """))
             # Sprint E: Signals & Evidence
             _db.execute(sa.text("""
                 CREATE TABLE IF NOT EXISTS asset_signals (

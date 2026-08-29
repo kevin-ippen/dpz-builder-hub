@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -65,7 +66,7 @@ export default function WishlistView() {
 
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [allCapabilities, setAllCapabilities] = useState<{ slug: string; name: string }[]>([]);
+  const [allCapabilities, setAllCapabilities] = useState<{ id: string; slug: string; name: string; category: string }[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [capFilter, setCapFilter] = useState<string | null>(null);
@@ -75,6 +76,16 @@ export default function WishlistView() {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
   const [category, setCategory] = useState('application');
+  // Enterprise fields
+  const [bizJustification, setBizJustification] = useState('');
+  const [effort, setEffort] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [requestedByTeam, setRequestedByTeam] = useState('');
+  const [budgetImpact, setBudgetImpact] = useState('');
+  const [ucCatalog, setUcCatalog] = useState('');
+  const [ucSchema, setUcSchema] = useState('');
+  const [selectedCapIds, setSelectedCapIds] = useState<Set<string>>(new Set());
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     setStaticSegments([]);
@@ -92,7 +103,7 @@ export default function WishlistView() {
       if (!resp.error) setItems(resp.data?.items ?? []);
       if (!capsResp.error && capsResp.data?.items) {
         // Dedupe caps that are actually used
-        setAllCapabilities(capsResp.data.items.map((c: any) => ({ slug: c.slug, name: c.name })));
+        setAllCapabilities(capsResp.data.items.map((c: any) => ({ id: c.id, slug: c.slug, name: c.name, category: c.category })));
       }
     } catch {} finally { setLoading(false); }
   }, [apiGet]);
@@ -101,10 +112,24 @@ export default function WishlistView() {
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
-    const resp = await apiPost<any>('/api/dpz/wishlist', { title, description, priority, category });
+    const payload: any = {
+      title, description, priority, category,
+      ...(bizJustification ? { business_justification: bizJustification } : {}),
+      ...(effort ? { estimated_effort: effort } : {}),
+      ...(targetDate ? { target_date: targetDate } : {}),
+      ...(requestedByTeam ? { requested_by_team: requestedByTeam } : {}),
+      ...(budgetImpact ? { budget_impact: budgetImpact } : {}),
+      ...(ucCatalog ? { uc_catalog: ucCatalog } : {}),
+      ...(ucSchema ? { uc_schema: ucSchema } : {}),
+      ...(selectedCapIds.size > 0 ? { capability_ids: Array.from(selectedCapIds) } : {}),
+    };
+    const resp = await apiPost<any>('/api/dpz/wishlist', payload);
     if (!resp.error) {
       toast({ title: 'Wish submitted!', description: `"${title}" added to the wishlist.` });
       setTitle(''); setDescription(''); setPriority('medium'); setCategory('application');
+      setBizJustification(''); setEffort(''); setTargetDate(''); setRequestedByTeam('');
+      setBudgetImpact(''); setUcCatalog(''); setUcSchema(''); setSelectedCapIds(new Set());
+      setShowAdvanced(false);
       setDialogOpen(false);
       fetchWishlist();
     } else {
@@ -153,23 +178,18 @@ export default function WishlistView() {
             <DialogHeader>
               <DialogTitle>What do you wish existed?</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 pt-2">
+            <div className="space-y-4 pt-2 max-h-[70vh] overflow-y-auto pr-1">
               <div className="space-y-1">
-                <Label>Title</Label>
-                <Input
-                  placeholder="e.g. Real-time delivery ETA API"
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                />
+                <Label>Title *</Label>
+                <Input placeholder="e.g. Real-time delivery ETA API" value={title} onChange={e => setTitle(e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label>Why do you need it?</Label>
-                <Textarea
-                  placeholder="What problem does it solve? Who benefits?"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  rows={3}
-                />
+                <Label>Problem Statement</Label>
+                <Textarea placeholder="What problem does this solve? Who benefits?" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+              </div>
+              <div className="space-y-1">
+                <Label>Business Justification</Label>
+                <Textarea placeholder="Why is this important to the business? What's the cost of not having it?" value={bizJustification} onChange={e => setBizJustification(e.target.value)} rows={2} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -177,6 +197,7 @@ export default function WishlistView() {
                   <Select value={priority} onValueChange={setPriority}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="critical">Critical</SelectItem>
                       <SelectItem value="high">High</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="low">Low</SelectItem>
@@ -196,6 +217,86 @@ export default function WishlistView() {
                   </Select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Estimated Effort</Label>
+                  <Select value={effort} onValueChange={setEffort}>
+                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="spike">Spike (&lt; 1 week)</SelectItem>
+                      <SelectItem value="small">Small (1-2 weeks)</SelectItem>
+                      <SelectItem value="medium">Medium (2-4 weeks)</SelectItem>
+                      <SelectItem value="large">Large (1-3 months)</SelectItem>
+                      <SelectItem value="epic">Epic (3+ months)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Requesting Team</Label>
+                  <Input placeholder="e.g. Store Ops" value={requestedByTeam} onChange={e => setRequestedByTeam(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Capabilities picker */}
+              {allCapabilities.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Required Capabilities</Label>
+                  <div className="grid grid-cols-2 gap-1 max-h-32 overflow-y-auto rounded-lg border p-2">
+                    {allCapabilities.map(cap => {
+                      const active = selectedCapIds.has(cap.id);
+                      return (
+                        <button key={cap.id} type="button"
+                          className={cn('flex items-center gap-1.5 rounded px-2 py-1 text-[11px] text-left transition-colors', active ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground')}
+                          onClick={() => { const next = new Set(selectedCapIds); if (active) next.delete(cap.id); else next.add(cap.id); setSelectedCapIds(next); }}
+                        >
+                          {active ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0" /> : <div className="w-2.5 h-2.5 rounded-full border shrink-0" />}
+                          <span className="truncate">{cap.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Advanced toggle */}
+              <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                {showAdvanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                Governance details (optional)
+              </button>
+              {showAdvanced && (
+                <div className="space-y-3 pt-1">
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Target Date</Label>
+                      <Input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Budget Impact</Label>
+                      <Select value={budgetImpact} onValueChange={setBudgetImpact}>
+                        <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="low">Low (&lt;$10K)</SelectItem>
+                          <SelectItem value="medium">Medium ($10-50K)</SelectItem>
+                          <SelectItem value="high">High ($50K+)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">UC Catalog</Label>
+                      <Input placeholder="catalog_name" value={ucCatalog} onChange={e => setUcCatalog(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">UC Schema</Label>
+                      <Input placeholder="schema_name" value={ucSchema} onChange={e => setUcSchema(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <Button className="w-full" onClick={handleSubmit} disabled={!title.trim()}>
                 Submit Wish
               </Button>

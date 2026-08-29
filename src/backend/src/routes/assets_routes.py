@@ -740,7 +740,8 @@ def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
     import sqlalchemy as sa
     result = db.execute(sa.text(
         "SELECT id, title, description, created_by, status, priority, category, "
-        "upvotes, signals_count, domain, linked_asset_id, created_at "
+        "upvotes, signals_count, domain, linked_asset_id, created_at, "
+        "business_justification, target_date, estimated_effort, requested_by_team, budget_impact "
         "FROM demands ORDER BY upvotes DESC, created_at DESC"
     ))
     items = []
@@ -752,6 +753,11 @@ def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
             "domain": row[9],
             "linked_asset_id": str(row[10]) if row[10] else None,
             "created_at": row[11].isoformat() if row[11] else None,
+            "business_justification": row[12],
+            "target_date": row[13].isoformat() if row[13] else None,
+            "estimated_effort": row[14],
+            "requested_by_team": row[15],
+            "budget_impact": row[16],
         })
     # Attach capability names to each item
     if items:
@@ -778,13 +784,18 @@ def list_demands(db: DBSessionDep, current_user: CurrentUserDep):
 
 @dpz_router.post("/wishlist")
 def create_wishlist_item(demand_in: dict, db: DBSessionDep, current_user: CurrentUserDep):
-    """Submit a new wishlist item."""
+    """Submit a new wishlist item with enterprise fields."""
     import sqlalchemy as sa
+    import json as _json
     demand_id = str(_uuid.uuid4())
     user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'unknown')
     db.execute(sa.text(
-        "INSERT INTO demands (id, title, description, created_by, status, priority, category, domain) "
-        "VALUES (:id, :title, :desc, :by, 'open', :pri, :cat, :cat)"
+        "INSERT INTO demands (id, title, description, created_by, status, priority, category, domain, "
+        "business_justification, target_date, estimated_effort, stakeholders, "
+        "uc_catalog, uc_schema, jira_key, jira_url, requested_by_team, budget_impact) "
+        "VALUES (:id, :title, :desc, :by, 'open', :pri, :cat, :cat, "
+        ":biz_just, :target_date, :effort, :stakeholders::jsonb, "
+        ":uc_cat, :uc_sch, :jira_key, :jira_url, :team, :budget)"
     ), {
         "id": demand_id,
         "title": demand_in.get("title", "Untitled"),
@@ -792,7 +803,24 @@ def create_wishlist_item(demand_in: dict, db: DBSessionDep, current_user: Curren
         "by": user_email,
         "pri": demand_in.get("priority", "medium"),
         "cat": demand_in.get("category"),
+        "biz_just": demand_in.get("business_justification"),
+        "target_date": demand_in.get("target_date"),
+        "effort": demand_in.get("estimated_effort"),
+        "stakeholders": _json.dumps(demand_in.get("stakeholders", [])),
+        "uc_cat": demand_in.get("uc_catalog"),
+        "uc_sch": demand_in.get("uc_schema"),
+        "jira_key": demand_in.get("jira_key"),
+        "jira_url": demand_in.get("jira_url"),
+        "team": demand_in.get("requested_by_team"),
+        "budget": demand_in.get("budget_impact"),
     })
+    # Link capabilities if provided
+    cap_ids = demand_in.get("capability_ids", [])
+    for cid in cap_ids:
+        db.execute(sa.text(
+            "INSERT INTO demand_capabilities (demand_id, capability_id) "
+            "VALUES (:did, :cid) ON CONFLICT DO NOTHING"
+        ), {"did": demand_id, "cid": cid})
     db.commit()
     return {"id": demand_id, "status": "created"}
 
@@ -814,7 +842,9 @@ def get_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserD
     import sqlalchemy as sa
     row = db.execute(sa.text(
         "SELECT id, title, description, created_by, status, priority, category, "
-        "upvotes, signals_count, domain, linked_asset_id, created_at, updated_at "
+        "upvotes, signals_count, domain, linked_asset_id, created_at, updated_at, "
+        "business_justification, target_date, estimated_effort, stakeholders, "
+        "uc_catalog, uc_schema, jira_key, jira_url, requested_by_team, budget_impact, reviewed_by, reviewed_at "
         "FROM demands WHERE id = :id"
     ), {"id": item_id}).fetchone()
     if not row:
@@ -827,6 +857,18 @@ def get_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserD
         "domain": row[9], "linked_asset_id": str(row[10]) if row[10] else None,
         "created_at": row[11].isoformat() if row[11] else None,
         "updated_at": row[12].isoformat() if row[12] else None,
+        "business_justification": row[13],
+        "target_date": row[14].isoformat() if row[14] else None,
+        "estimated_effort": row[15],
+        "stakeholders": row[16] if row[16] else [],
+        "uc_catalog": row[17],
+        "uc_schema": row[18],
+        "jira_key": row[19],
+        "jira_url": row[20],
+        "requested_by_team": row[21],
+        "budget_impact": row[22],
+        "reviewed_by": row[23],
+        "reviewed_at": row[24].isoformat() if row[24] else None,
     }
     # Fetch linked capabilities
     caps = db.execute(sa.text(
@@ -875,6 +917,96 @@ def update_wish_capabilities(item_id: str, body: dict, db: DBSessionDep, current
         ), {"did": item_id, "cid": cid})
     db.commit()
     return {"status": "updated", "count": len(cap_ids)}
+
+
+@dpz_router.put("/wishlist/{item_id}")
+def update_wishlist_item(item_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Update a wishlist item (any writable field)."""
+    import sqlalchemy as sa
+    import json as _json
+    allowed = [
+        "title", "description", "priority", "category", "status",
+        "business_justification", "target_date", "estimated_effort",
+        "uc_catalog", "uc_schema", "jira_key", "jira_url",
+        "requested_by_team", "budget_impact", "linked_asset_id",
+    ]
+    sets = []
+    params = {"id": item_id}
+    for field in allowed:
+        if field in body:
+            sets.append(f"{field} = :{field}")
+            params[field] = body[field]
+    if "stakeholders" in body:
+        sets.append("stakeholders = :stakeholders::jsonb")
+        params["stakeholders"] = _json.dumps(body["stakeholders"])
+    if "reviewed_by" in body:
+        sets.append("reviewed_by = :reviewed_by")
+        sets.append("reviewed_at = now()")
+        params["reviewed_by"] = body["reviewed_by"]
+    if not sets:
+        return {"status": "no_changes"}
+    sets.append("updated_at = now()")
+    sql = f"UPDATE demands SET {', '.join(sets)} WHERE id = :id"
+    db.execute(sa.text(sql), params)
+    db.commit()
+    return {"status": "updated"}
+
+
+@dpz_router.get("/assets/{asset_id}/capabilities")
+def get_asset_capabilities(asset_id: str, db: DBSessionDep):
+    """Get capabilities linked to an asset."""
+    import sqlalchemy as sa
+    result = db.execute(sa.text(
+        "SELECT c.id, c.slug, c.name, c.description, c.category, c.platform_feature, c.icon "
+        "FROM capabilities c JOIN asset_capabilities ac ON c.id = ac.capability_id "
+        "WHERE ac.asset_id = :aid ORDER BY c.sort_order"
+    ), {"aid": asset_id})
+    return {"items": [{
+        "id": str(r[0]), "slug": r[1], "name": r[2], "description": r[3],
+        "category": r[4], "platform_feature": r[5], "icon": r[6],
+    } for r in result]}
+
+
+@dpz_router.put("/assets/{asset_id}/capabilities")
+def update_asset_capabilities(asset_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Set capabilities for an asset. body: {capability_ids: [...]}"""
+    import sqlalchemy as sa
+    cap_ids = body.get("capability_ids", [])
+    db.execute(sa.text("DELETE FROM asset_capabilities WHERE asset_id = :aid"), {"aid": asset_id})
+    for cid in cap_ids:
+        db.execute(sa.text(
+            "INSERT INTO asset_capabilities (asset_id, capability_id) VALUES (:aid, :cid) ON CONFLICT DO NOTHING"
+        ), {"aid": asset_id, "cid": cid})
+    db.commit()
+    return {"status": "updated", "count": len(cap_ids)}
+
+
+@dpz_router.put("/assets/{asset_id}/governance")
+def update_asset_governance(asset_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Update governance/enterprise fields on an asset (admin/SA use)."""
+    import sqlalchemy as sa
+    import json as _json
+    allowed = [
+        "owner_email", "team", "domain", "uc_catalog", "uc_schema", "uc_table",
+        "jira_key", "jira_url", "business_impact", "target_audience",
+        "slack_channel", "sla_tier", "cost_center", "value_hypothesis",
+    ]
+    sets = []
+    params = {"id": asset_id}
+    for field in allowed:
+        if field in body:
+            sets.append(f"{field} = :{field}")
+            params[field] = body[field]
+    if "stakeholders" in body:
+        sets.append("stakeholders = :stakeholders::jsonb")
+        params["stakeholders"] = _json.dumps(body["stakeholders"])
+    if not sets:
+        return {"status": "no_changes"}
+    sets.append("updated_at = now()")
+    sql = f"UPDATE assets SET {', '.join(sets)} WHERE id = :id"
+    db.execute(sa.text(sql), params)
+    db.commit()
+    return {"status": "updated"}
 
 
 @dpz_router.get("/portfolio/my-assets")

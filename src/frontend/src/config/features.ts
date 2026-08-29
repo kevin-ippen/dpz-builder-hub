@@ -4,6 +4,7 @@ import {
     Lightbulb,
     Briefcase,
     BarChart3,
+    Settings,
     Target,
     type LucideIcon,
   } from 'lucide-react';
@@ -94,6 +95,18 @@ import {
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'assets',
+    },
+
+    // ─── Admin ─── Platform administration, only for admins/SAs
+    {
+      id: 'settings',
+      name: 'Settings',
+      path: '/settings',
+      description: 'Platform configuration, roles, connectors, and governance settings.',
+      icon: Settings,
+      group: 'Observe',
+      maturity: 'ga',
+      showInLanding: false,
     },
   ];
   
