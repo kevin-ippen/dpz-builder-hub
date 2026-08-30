@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, AlertCircle,
   MapPin, Globe, Calendar, User, Tag, FileJson,
+  Blocks, Building2, Database, ExternalLink, Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -101,6 +102,8 @@ export default function AssetDetailView() {
   const [error, setError] = useState<string | null>(null);
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
   const [evidenceSummary, setEvidenceSummary] = useState<any | null>(null);
+  const [capabilities, setCapabilities] = useState<any[]>([]);
+  const [governance, setGovernance] = useState<any>({});
 
   const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
@@ -118,9 +121,11 @@ export default function AssetDetailView() {
     setLoading(true);
     setError(null);
     try {
-      const [assetRes, evidenceRes] = await Promise.all([
+      const [assetRes, evidenceRes, capsRes, govRes] = await Promise.all([
         apiGet<AssetRead>(`/api/assets/${assetId}`),
         apiGet<any>(`/api/dpz/evidence`),
+        apiGet<any>(`/api/dpz/assets/${assetId}/capabilities`),
+        apiGet<any>(`/api/dpz/assets/${assetId}/detail`),
       ]);
       if (assetRes.error) throw new Error(assetRes.error);
       const assetData = assetRes.data ?? null;
@@ -128,6 +133,8 @@ export default function AssetDetailView() {
       if (assetData && Array.isArray(evidenceRes.data?.items)) {
         setEvidenceSummary(evidenceRes.data.items.find((x: any) => x.id === assetData.id) ?? null);
       }
+      if (!capsRes.error && capsRes.data?.items) setCapabilities(capsRes.data.items);
+      if (!govRes.error && govRes.data) setGovernance(govRes.data);
     } catch (err: any) {
       setError(err.message || 'Failed to load asset');
     } finally {
@@ -235,6 +242,18 @@ export default function AssetDetailView() {
             )}
           </div>
         )}
+
+        {/* Capability tags */}
+        {capabilities.length > 0 && (
+          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+            <Blocks className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            {capabilities.map((cap: any) => (
+              <Badge key={cap.slug} variant="outline" className="text-[10px] font-mono">
+                {cap.name}
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Contract block */}
@@ -338,6 +357,85 @@ export default function AssetDetailView() {
 
             </CardContent>
           </Card>
+
+          {/* Governance & Enterprise Metadata */}
+          {(governance.owner_email || governance.team || governance.uc_catalog || governance.jira_key || governance.sla_tier) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                  <Shield className="h-3 w-3" /> Governance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {governance.owner_email && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> Owner</Label>
+                      <p className="text-sm mt-1">{governance.owner_email}</p>
+                    </div>
+                  )}
+                  {governance.team && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="h-3 w-3" /> Team</Label>
+                      <p className="text-sm mt-1">{governance.team}</p>
+                    </div>
+                  )}
+                  {governance.domain && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Domain</Label>
+                      <p className="text-sm mt-1">{governance.domain}</p>
+                    </div>
+                  )}
+                  {governance.uc_catalog && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1"><Database className="h-3 w-3" /> UC Path</Label>
+                      <p className="text-sm font-mono mt-1">
+                        {governance.uc_catalog}
+                        {governance.uc_schema ? `.${governance.uc_schema}` : ''}
+                        {governance.uc_table ? `.${governance.uc_table}` : ''}
+                      </p>
+                    </div>
+                  )}
+                  {governance.jira_key && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Jira</Label>
+                      <p className="text-sm font-mono mt-1">{governance.jira_key}</p>
+                    </div>
+                  )}
+                  {governance.sla_tier && governance.sla_tier !== 'none' && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1"><Shield className="h-3 w-3" /> SLA Tier</Label>
+                      <Badge variant="outline" className="text-xs mt-1">{governance.sla_tier}</Badge>
+                    </div>
+                  )}
+                  {governance.cost_center && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Cost Center</Label>
+                      <p className="text-sm font-mono mt-1">{governance.cost_center}</p>
+                    </div>
+                  )}
+                  {governance.business_impact && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Business Impact</Label>
+                      <Badge variant="secondary" className="text-xs mt-1">{governance.business_impact}</Badge>
+                    </div>
+                  )}
+                  {governance.target_audience && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Target Audience</Label>
+                      <p className="text-sm mt-1">{governance.target_audience}</p>
+                    </div>
+                  )}
+                  {governance.slack_channel && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Slack</Label>
+                      <p className="text-sm font-mono mt-1">{governance.slack_channel}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Properties */}
           <PropertiesCard properties={asset.properties} />

@@ -1024,6 +1024,31 @@ def update_asset_capabilities(asset_id: str, body: dict, db: DBSessionDep, curre
     return {"status": "updated", "count": len(cap_ids)}
 
 
+@dpz_router.get("/assets/{asset_id}/detail")
+def get_dpz_asset_detail(asset_id: str, db: DBSessionDep):
+    """Get DPZ enterprise/governance fields for an asset."""
+    import sqlalchemy as sa
+    row = db.execute(sa.text(
+        "SELECT owner_email, team, domain, uc_catalog, uc_schema, uc_table, "
+        "jira_key, jira_url, business_impact, target_audience, "
+        "slack_channel, sla_tier, cost_center, stakeholders, value_hypothesis, "
+        "repo_url, demo_url "
+        "FROM assets WHERE id = :id"
+    ), {"id": asset_id}).fetchone()
+    if not row:
+        return {}
+    return {
+        "owner_email": row[0], "team": row[1], "domain": row[2],
+        "uc_catalog": row[3], "uc_schema": row[4], "uc_table": row[5],
+        "jira_key": row[6], "jira_url": row[7],
+        "business_impact": row[8], "target_audience": row[9],
+        "slack_channel": row[10], "sla_tier": row[11], "cost_center": row[12],
+        "stakeholders": row[13] if row[13] else [],
+        "value_hypothesis": row[14],
+        "repo_url": row[15], "demo_url": row[16],
+    }
+
+
 @dpz_router.put("/assets/{asset_id}/governance")
 def update_asset_governance(asset_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
     """Update governance/enterprise fields on an asset (admin/SA use)."""
