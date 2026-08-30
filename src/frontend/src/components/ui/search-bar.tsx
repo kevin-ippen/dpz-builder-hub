@@ -57,19 +57,20 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
 
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/search?search_term=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-          let errorDetails = await response.text();
-          try {
-            const errorJson = JSON.parse(errorDetails);
-            errorDetails = errorJson.detail || errorDetails;
-          } catch (parseError) {
-            // Ignore if not JSON
-          }
-          throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorDetails}`);
-        }
-        const data = await response.json();
-        setResults(Array.isArray(data) ? data : []);
+        // Fan out to both Ontos (entity) and DPZ (asset/wish/cap) search
+        const [ontosRes, dpzRes] = await Promise.all([
+          fetch(`/api/search?search_term=${encodeURIComponent(query)}`).then(r => r.ok ? r.json() : []).catch(() => []),
+          fetch(`/api/dpz/search?q=${encodeURIComponent(query)}`).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
+        ]);
+
+        // Merge: DPZ results first, then Ontos (dedup by link)
+        const dpzResults: SearchResult[] = (dpzRes.results || []).map((r: any) => ({
+          id: r.id, type: r.type, title: r.title, description: r.description, link: r.link,
+        }));
+        const ontosResults: SearchResult[] = Array.isArray(ontosRes) ? ontosRes : [];
+        const seen = new Set(dpzResults.map(r => r.link));
+        const merged = [...dpzResults, ...ontosResults.filter(r => !seen.has(r.link))];
+        setResults(merged.slice(0, 12));
       } catch (error) {
         console.error('Search error:', error);
         setResults([]);
@@ -124,6 +125,12 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
         return <Book className="h-4 w-4" />;
       case 'persona':
         return <Shield className="h-4 w-4" />;
+      case 'asset':
+        return <Package className="h-4 w-4" />;
+      case 'wish':
+        return <Activity className="h-4 w-4" />;
+      case 'capability':
+        return <Brain className="h-4 w-4" />;
       default:
         return <Search className="h-4 w-4" />;
     }

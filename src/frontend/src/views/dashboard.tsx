@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart3, TrendingUp, Activity, ShieldCheck, Lightbulb,
   FlaskConical, Package, ThumbsUp, ArrowRight, CheckCircle2,
+  Clock, X, GitPullRequest,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -58,7 +59,7 @@ function StatCard({ label, value, sub, icon: Icon }: { label: string; value: str
 
 export default function DashboardView() {
   const navigate = useNavigate();
-  const { get: apiGet } = useApi();
+  const { get: apiGet, put: apiPut } = useApi();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
@@ -68,6 +69,7 @@ export default function DashboardView() {
   const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
   const [wishlist, setWishlist] = useState<WishItem[]>([]);
   const [capabilities, setCapabilities] = useState<CapItem[]>([]);
+  const [promotions, setPromotions] = useState<any[]>([]);
 
   useEffect(() => {
     setStaticSegments([]); setDynamicTitle('Dashboard');
@@ -76,13 +78,14 @@ export default function DashboardView() {
 
   useEffect(() => {
     (async () => {
-      const [pR, aR, hR, eR, wR, cR] = await Promise.all([
+      const [pR, aR, hR, eR, wR, cR, prR] = await Promise.all([
         apiGet<PortfolioData>('/api/dpz/portfolio'),
         apiGet<AdoptionData>('/api/dpz/adoption'),
         apiGet<any>('/api/dpz/health'),
         apiGet<any>('/api/dpz/evidence'),
         apiGet<any>('/api/dpz/wishlist'),
         apiGet<any>('/api/dpz/capabilities'),
+        apiGet<any>('/api/dpz/promotions'),
       ]);
       if (!pR.error && pR.data) setPortfolio(pR.data);
       if (!aR.error && aR.data) setAdoption(aR.data);
@@ -90,6 +93,7 @@ export default function DashboardView() {
       if (!eR.error && eR.data) setEvidence(eR.data.items ?? []);
       if (!wR.error && wR.data?.items) setWishlist(wR.data.items);
       if (!cR.error && cR.data?.items) setCapabilities(cR.data.items);
+      if (!prR.error && prR.data?.items) setPromotions(prR.data.items);
     })();
   }, [apiGet]);
 
@@ -171,6 +175,9 @@ export default function DashboardView() {
           </TabsTrigger>
           <TabsTrigger value="health" className="flex items-center gap-1.5">
             <Activity className="h-3.5 w-3.5" /> Health
+          </TabsTrigger>
+          <TabsTrigger value="promotions" className="flex items-center gap-1.5">
+            <GitPullRequest className="h-3.5 w-3.5" /> Promotions{promotions.filter(p => p.status === 'pending').length > 0 ? ` (${promotions.filter(p => p.status === 'pending').length})` : ''}
           </TabsTrigger>
           <TabsTrigger value="activity" className="flex items-center gap-1.5">
             <TrendingUp className="h-3.5 w-3.5" /> Activity
@@ -372,6 +379,89 @@ export default function DashboardView() {
         </TabsContent>
 
         {/* ─── Activity ─── */}
+        {/* Promotions review queue */}
+        <TabsContent value="promotions" className="pt-4">
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold">Promotion Requests</h3>
+            {promotions.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">No promotion requests yet.</CardContent></Card>
+            ) : (
+              <div className="space-y-2">
+                {promotions.map((p: any) => (
+                  <Card key={p.id}>
+                    <CardContent className="py-3">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <button
+                            className="text-sm font-medium hover:text-primary transition-colors"
+                            onClick={() => navigate(`/assets/${p.asset_id}`)}
+                          >
+                            {p.asset_name}
+                          </button>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-[9px] font-mono">{p.from_maturity}</Badge>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <Badge className="text-[9px] font-mono bg-blue-600 text-white">{p.to_maturity}</Badge>
+                            <span className="text-[11px] text-muted-foreground ml-2">by {p.requested_by?.split('@')[0]}</span>
+                          </div>
+                          {p.request_notes && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.request_notes}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {p.status === 'pending' ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="text-xs h-7"
+                                onClick={async () => {
+                                  await apiPut<any>(`/api/dpz/promotions/${p.id}/review`, {
+                                    decision: 'approved', review_notes: '',
+                                  });
+                                  const resp = await apiGet<any>('/api/dpz/promotions');
+                                  if (!resp.error && resp.data?.items) setPromotions(resp.data.items);
+                                }}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-7 text-destructive"
+                                onClick={async () => {
+                                  await apiPut<any>(`/api/dpz/promotions/${p.id}/review`, {
+                                    decision: 'rejected', review_notes: '',
+                                  });
+                                  const resp = await apiGet<any>('/api/dpz/promotions');
+                                  if (!resp.error && resp.data?.items) setPromotions(resp.data.items);
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[9px] font-mono',
+                                p.status === 'approved' ? 'border-green-500 text-green-600' : 'border-red-400 text-red-500'
+                              )}
+                            >
+                              {p.status === 'approved' ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
+                              {p.status}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         <TabsContent value="activity" className="pt-4">
           {!adoption ? (
             <p className="text-center text-muted-foreground py-8">Loading...</p>

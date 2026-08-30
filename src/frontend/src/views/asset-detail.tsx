@@ -4,12 +4,17 @@ import {
   ArrowLeft, AlertCircle,
   MapPin, Globe, Calendar, User, Tag, FileJson,
   Blocks, Building2, Database, ExternalLink, Shield,
+  TrendingUp, CheckCircle2, X, Clock, Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -32,6 +37,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { MaturityContract } from '@/components/assets/maturity-contract';
+import { MATURITY_ORDER } from '@/components/assets/asset-card';
 import { SimilarAssets } from '@/components/assets/similar-assets';
 import { VersionTimeline } from '@/components/assets/version-timeline';
 import { SignalTimeline } from '@/components/assets/signal-timeline';
@@ -104,6 +110,10 @@ export default function AssetDetailView() {
   const [evidenceSummary, setEvidenceSummary] = useState<any | null>(null);
   const [capabilities, setCapabilities] = useState<any[]>([]);
   const [governance, setGovernance] = useState<any>({});
+  const [promoHistory, setPromoHistory] = useState<any[]>([]);
+  const [linkedWishes, setLinkedWishes] = useState<any[]>([]);
+  const [promoDialogOpen, setPromoDialogOpen] = useState(false);
+  const [promoNotes, setPromoNotes] = useState('');
 
   const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
@@ -121,11 +131,13 @@ export default function AssetDetailView() {
     setLoading(true);
     setError(null);
     try {
-      const [assetRes, evidenceRes, capsRes, govRes] = await Promise.all([
+      const [assetRes, evidenceRes, capsRes, govRes, promoRes, wishRes] = await Promise.all([
         apiGet<AssetRead>(`/api/assets/${assetId}`),
         apiGet<any>(`/api/dpz/evidence`),
         apiGet<any>(`/api/dpz/assets/${assetId}/capabilities`),
         apiGet<any>(`/api/dpz/assets/${assetId}/detail`),
+        apiGet<any>(`/api/dpz/assets/${assetId}/promotions`),
+        apiGet<any>(`/api/dpz/assets/${assetId}/wishes`),
       ]);
       if (assetRes.error) throw new Error(assetRes.error);
       const assetData = assetRes.data ?? null;
@@ -135,6 +147,8 @@ export default function AssetDetailView() {
       }
       if (!capsRes.error && capsRes.data?.items) setCapabilities(capsRes.data.items);
       if (!govRes.error && govRes.data) setGovernance(govRes.data);
+      if (!promoRes.error && promoRes.data?.items) setPromoHistory(promoRes.data.items);
+      if (!wishRes.error && wishRes.data?.items) setLinkedWishes(wishRes.data.items);
     } catch (err: any) {
       setError(err.message || 'Failed to load asset');
     } finally {
@@ -477,7 +491,116 @@ export default function AssetDetailView() {
           >
             Adopt this asset
           </Button>
+
+          {/* Promotion request */}
+          {(() => {
+            const currentIdx = MATURITY_ORDER.indexOf((asset as any).maturity || 'idea');
+            const nextMaturity = currentIdx >= 0 && currentIdx < MATURITY_ORDER.length - 1
+              ? MATURITY_ORDER[currentIdx + 1] : null;
+            if (!nextMaturity) return null;
+            return (
+              <Dialog open={promoDialogOpen} onOpenChange={setPromoDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full" size="sm" variant="outline">
+                    <TrendingUp className="h-3.5 w-3.5 mr-1.5" /> Request Promotion
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Request Maturity Promotion</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 text-sm">
+                      <Badge variant="outline">{(asset as any).maturity}</Badge>
+                      <span className="text-muted-foreground">→</span>
+                      <Badge className="bg-blue-600 text-white">{nextMaturity}</Badge>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Justification</Label>
+                      <Textarea
+                        className="mt-1"
+                        placeholder="Why is this asset ready for promotion?"
+                        value={promoNotes}
+                        onChange={(e) => setPromoNotes(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      disabled={!promoNotes.trim()}
+                      onClick={async () => {
+                        const resp = await apiPost<any>('/api/dpz/promotions', {
+                          asset_id: asset.id,
+                          from_maturity: (asset as any).maturity,
+                          to_maturity: nextMaturity,
+                          notes: promoNotes,
+                        });
+                        if (!resp.error) {
+                          toast({ title: 'Promotion requested', description: `${(asset as any).maturity} → ${nextMaturity}` });
+                          setPromoDialogOpen(false);
+                          setPromoNotes('');
+                          // Refresh promos
+                          const pr = await apiGet<any>(`/api/dpz/assets/${assetId}/promotions`);
+                          if (!pr.error && pr.data?.items) setPromoHistory(pr.data.items);
+                        }
+                      }}
+                    >
+                      Submit Request
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            );
+          })()}
         </div>
+
+        {/* Promotion history */}
+        {promoHistory.length > 0 && (
+          <div className="rounded-xl border p-4">
+            <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">Promotion History</h3>
+            <div className="space-y-2">
+              {promoHistory.map((p: any) => (
+                <div key={p.id} className="flex items-start gap-2 text-xs">
+                  {p.status === 'approved' ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 mt-0.5 shrink-0" />
+                  ) : p.status === 'rejected' ? (
+                    <X className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                  ) : (
+                    <Clock className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium">{p.from_maturity} → {p.to_maturity}</p>
+                    <p className="text-muted-foreground">
+                      {p.status} · {p.requested_by?.split('@')[0]}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Linked wishes (demands this asset addresses) */}
+        {linkedWishes.length > 0 && (
+          <div className="rounded-xl border p-4">
+            <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">
+              <Link2 className="h-3 w-3 inline mr-1" />Addresses Wishes
+            </h3>
+            <div className="space-y-1.5">
+              {linkedWishes.map((w: any) => (
+                <button
+                  key={w.id}
+                  className="flex items-center gap-2 w-full text-left rounded-lg p-2 hover:bg-muted/50 transition-colors text-xs"
+                  onClick={() => navigate(`/wishlist/${w.id}`)}
+                >
+                  <span className="flex-1 truncate font-medium">{w.title}</span>
+                  <Badge variant="outline" className="text-[9px] shrink-0">{w.upvotes}↑</Badge>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Version timeline */}
         <VersionTimeline assetId={asset.id} />

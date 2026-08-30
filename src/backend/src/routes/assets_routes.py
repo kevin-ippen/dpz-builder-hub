@@ -1077,6 +1077,222 @@ def update_asset_governance(asset_id: str, body: dict, db: DBSessionDep, current
     return {"status": "updated"}
 
 
+# ════════════════════════════════════════════════════
+# DPZ Search (cross-entity: assets, wishes, capabilities)
+# ════════════════════════════════════════════════════
+
+@dpz_router.get("/search")
+def dpz_search(q: str, db: DBSessionDep, current_user: CurrentUserDep):
+    """Search across assets, wishlist items, and capabilities."""
+    import sqlalchemy as sa
+    if not q or len(q.strip()) < 2:
+        return {"results": []}
+    term = f"%{q.strip().lower()}%"
+    results = []
+
+    # Search assets
+    asset_rows = db.execute(sa.text(
+        "SELECT a.id, a.name, at.name as type_name, a.maturity, a.description "
+        "FROM assets a JOIN asset_types at ON a.asset_type_id = at.id "
+        "WHERE LOWER(a.name) LIKE :q OR LOWER(COALESCE(a.description,'')) LIKE :q "
+        "ORDER BY a.install_count DESC NULLS LAST LIMIT 8"
+    ), {"q": term})
+    for r in asset_rows:
+        results.append({
+            "id": str(r[0]), "type": "asset", "title": r[1],
+            "description": f"{r[2]} · {r[3] or 'idea'}",
+            "link": f"/assets/{r[0]}",
+        })
+
+    # Search wishlist
+    wish_rows = db.execute(sa.text(
+        "SELECT id, title, category, status, description "
+        "FROM demands "
+        "WHERE LOWER(title) LIKE :q OR LOWER(COALESCE(description,'')) LIKE :q "
+        "ORDER BY upvotes DESC LIMIT 5"
+    ), {"q": term})
+    for r in wish_rows:
+        results.append({
+            "id": str(r[0]), "type": "wish", "title": r[1],
+            "description": f"Wish · {r[3] or 'open'}",
+            "link": f"/wishlist/{r[0]}",
+        })
+
+    # Search capabilities
+    cap_rows = db.execute(sa.text(
+        "SELECT id, name, category, description "
+        "FROM capabilities "
+        "WHERE LOWER(name) LIKE :q OR LOWER(COALESCE(description,'')) LIKE :q "
+        "ORDER BY sort_order LIMIT 5"
+    ), {"q": term})
+    for r in cap_rows:
+        results.append({
+            "id": str(r[0]), "type": "capability", "title": r[1],
+            "description": f"Capability · {r[2]}",
+            "link": f"/settings/capabilities",
+        })
+
+    return {"results": results, "total": len(results)}
+
+
+# ════════════════════════════════════════════════════
+# Promotion Workflow
+# ════════════════════════════════════════════════════
+
+@dpz_router.post("/promotions")
+def request_promotion(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Request a maturity promotion for an asset."""
+    import sqlalchemy as sa
+    user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'unknown')
+    promo_id = str(_uuid.uuid4())
+    db.execute(sa.text(
+        "INSERT INTO promotion_requests (id, asset_id, from_maturity, to_maturity, requested_by, request_notes) "
+        "VALUES (:id, :aid, :from_m, :to_m, :by, :notes)"
+    ), {
+        "id": promo_id,
+        "aid": body.get("asset_id"),
+        "from_m": body.get("from_maturity"),
+        "to_m": body.get("to_maturity"),
+        "by": user_email,
+        "notes": body.get("notes", ""),
+    })
+    db.commit()
+    return {"id": promo_id, "status": "pending"}
+
+
+@dpz_router.get("/promotions")
+def list_promotions(db: DBSessionDep, current_user: CurrentUserDep, status_filter: str = None):
+    """List promotion requests, optionally filtered by status."""
+    import sqlalchemy as sa
+    sql = (
+        "SELECT pr.id, pr.asset_id, a.name as asset_name, pr.from_maturity, pr.to_maturity, "
+        "pr.requested_by, pr.reviewed_by, pr.status, pr.request_notes, pr.review_notes, "
+        "pr.requested_at, pr.reviewed_at "
+        "FROM promotion_requests pr "
+        "JOIN assets a ON pr.asset_id = a.id "
+    )
+    params = {}
+    if status_filter:
+        sql += " WHERE pr.status = :status"
+        params["status"] = status_filter
+    sql += " ORDER BY pr.requested_at DESC"
+    rows = db.execute(sa.text(sql), params)
+    return {"items": [{
+        "id": str(r[0]), "asset_id": str(r[1]), "asset_name": r[2],
+        "from_maturity": r[3], "to_maturity": r[4],
+        "requested_by": r[5], "reviewed_by": r[6],
+        "status": r[7], "request_notes": r[8], "review_notes": r[9],
+        "requested_at": r[10].isoformat() if r[10] else None,
+        "reviewed_at": r[11].isoformat() if r[11] else None,
+    } for r in rows]}
+
+
+@dpz_router.put("/promotions/{promo_id}/review")
+def review_promotion(promo_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Approve or reject a promotion request. On approve, updates asset maturity."""
+    import sqlalchemy as sa
+    user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'unknown')
+    decision = body.get("decision", "approved")  # approved | rejected
+    review_notes = body.get("review_notes", "")
+
+    # Update the request
+    db.execute(sa.text(
+        "UPDATE promotion_requests SET status = :status, reviewed_by = :by, "
+        "review_notes = :notes, reviewed_at = now() WHERE id = :id"
+    ), {"status": decision, "by": user_email, "notes": review_notes, "id": promo_id})
+
+    # If approved, update the asset's maturity
+    if decision == "approved":
+        promo = db.execute(sa.text(
+            "SELECT asset_id, to_maturity FROM promotion_requests WHERE id = :id"
+        ), {"id": promo_id}).fetchone()
+        if promo:
+            db.execute(sa.text(
+                "UPDATE assets SET maturity = :m, updated_at = now() WHERE id = :aid"
+            ), {"m": promo[1], "aid": str(promo[0])})
+
+    db.commit()
+    return {"status": decision, "promo_id": promo_id}
+
+
+@dpz_router.get("/assets/{asset_id}/promotions")
+def get_asset_promotions(asset_id: str, db: DBSessionDep):
+    """Get promotion history for an asset."""
+    import sqlalchemy as sa
+    rows = db.execute(sa.text(
+        "SELECT id, from_maturity, to_maturity, requested_by, reviewed_by, "
+        "status, request_notes, review_notes, requested_at, reviewed_at "
+        "FROM promotion_requests WHERE asset_id = :aid ORDER BY requested_at DESC"
+    ), {"aid": asset_id})
+    return {"items": [{
+        "id": str(r[0]), "from_maturity": r[1], "to_maturity": r[2],
+        "requested_by": r[3], "reviewed_by": r[4],
+        "status": r[5], "request_notes": r[6], "review_notes": r[7],
+        "requested_at": r[8].isoformat() if r[8] else None,
+        "reviewed_at": r[9].isoformat() if r[9] else None,
+    } for r in rows]}
+
+
+# ════════════════════════════════════════════════════
+# Wish-to-Asset Matching
+# ════════════════════════════════════════════════════
+
+@dpz_router.post("/wishlist/{wish_id}/match")
+def match_wish_to_asset(wish_id: str, body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Link a wish to an asset that addresses it. Updates wish status to matched."""
+    import sqlalchemy as sa
+    asset_id = body.get("asset_id")
+    if not asset_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="asset_id required")
+
+    # Link
+    db.execute(sa.text(
+        "UPDATE demands SET linked_asset_id = :aid, status = 'matched', updated_at = now() WHERE id = :wid"
+    ), {"aid": asset_id, "wid": wish_id})
+
+    # Also add to asset_demand_links
+    db.execute(sa.text(
+        "INSERT INTO asset_demand_links (asset_id, demand_id) VALUES (:aid, :did) ON CONFLICT DO NOTHING"
+    ), {"aid": asset_id, "did": wish_id})
+
+    db.commit()
+    return {"status": "matched", "wish_id": wish_id, "asset_id": asset_id}
+
+
+@dpz_router.delete("/wishlist/{wish_id}/match")
+def unmatch_wish(wish_id: str, db: DBSessionDep, current_user: CurrentUserDep):
+    """Remove the match, set wish back to open."""
+    import sqlalchemy as sa
+    # Get current linked asset
+    row = db.execute(sa.text("SELECT linked_asset_id FROM demands WHERE id = :wid"), {"wid": wish_id}).fetchone()
+    if row and row[0]:
+        db.execute(sa.text(
+            "DELETE FROM asset_demand_links WHERE asset_id = :aid AND demand_id = :did"
+        ), {"aid": str(row[0]), "did": wish_id})
+    db.execute(sa.text(
+        "UPDATE demands SET linked_asset_id = NULL, status = 'open', updated_at = now() WHERE id = :wid"
+    ), {"wid": wish_id})
+    db.commit()
+    return {"status": "unmatched"}
+
+
+@dpz_router.get("/assets/{asset_id}/wishes")
+def get_asset_wishes(asset_id: str, db: DBSessionDep):
+    """Get wishes that this asset addresses."""
+    import sqlalchemy as sa
+    rows = db.execute(sa.text(
+        "SELECT d.id, d.title, d.status, d.upvotes, d.category "
+        "FROM demands d "
+        "JOIN asset_demand_links adl ON d.id = adl.demand_id "
+        "WHERE adl.asset_id = :aid "
+        "ORDER BY d.upvotes DESC"
+    ), {"aid": asset_id})
+    return {"items": [{
+        "id": str(r[0]), "title": r[1], "status": r[2], "upvotes": r[3], "category": r[4],
+    } for r in rows]}
+
+
 @dpz_router.get("/portfolio/my-assets")
 def get_my_assets(db: DBSessionDep, current_user: CurrentUserDep):
     """Get all assets created by the current user."""

@@ -4,7 +4,7 @@ import {
   ArrowLeft, ThumbsUp, Sparkles, Clock, CheckCircle2, AlertTriangle,
   Brain, Database, Zap, Shield, Server, Search, BarChart, Layout,
   Activity, MapPin, Eye, MessageCircle, GitBranch, Package, Bot,
-  Columns, Plus, X,
+  Columns, Plus, X, Link2, Unlink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -70,7 +70,7 @@ function CapIcon({ name, className }: { name?: string; className?: string }) {
 export default function WishDetailView() {
   const { wishId } = useParams<{ wishId: string }>();
   const navigate = useNavigate();
-  const { get: apiGet, post: apiPost, put: apiPut } = useApi();
+  const { get: apiGet, post: apiPost, put: apiPut, delete: apiDelete } = useApi();
   const { toast } = useToast();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
@@ -79,6 +79,9 @@ export default function WishDetailView() {
   const [allCapabilities, setAllCapabilities] = useState<Capability[]>([]);
   const [loading, setLoading] = useState(true);
   const [capDialogOpen, setCapDialogOpen] = useState(false);
+  const [matchDialogOpen, setMatchDialogOpen] = useState(false);
+  const [matchQuery, setMatchQuery] = useState('');
+  const [matchResults, setMatchResults] = useState<any[]>([]);
 
   useEffect(() => {
     setStaticSegments([{ label: 'Wishlist', path: '/wishlist' }]);
@@ -293,28 +296,111 @@ export default function WishDetailView() {
             </CardContent>
           </Card>
 
-          {/* Linked asset */}
-          {wish.linked_asset && (
-            <Card>
-              <CardHeader className="pb-2">
+          {/* Linked asset (match) */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                  Matched Asset
+                  {wish.linked_asset ? 'Matched Asset' : 'Match to Asset'}
                 </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <button
-                  className="flex items-center gap-3 rounded-lg border p-3 w-full text-left hover:border-primary/20 transition-colors"
-                  onClick={() => navigate(`/assets/${wish.linked_asset!.id}`)}
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{wish.linked_asset.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{wish.linked_asset.type_name}</p>
-                  </div>
-                  <Badge variant="secondary" className="text-[9px]">View</Badge>
-                </button>
-              </CardContent>
-            </Card>
-          )}
+                {!wish.linked_asset && (
+                  <Dialog open={matchDialogOpen} onOpenChange={setMatchDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="text-xs gap-1">
+                        <Link2 className="h-3 w-3" /> Find Match
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Match Wish to Asset</DialogTitle>
+                      </DialogHeader>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Search for an existing asset that addresses this wish.
+                      </p>
+                      <input
+                        className="w-full rounded-lg border px-3 py-2 text-sm bg-background"
+                        placeholder="Search assets..."
+                        value={matchQuery}
+                        onChange={async (e) => {
+                          setMatchQuery(e.target.value);
+                          if (e.target.value.length >= 2) {
+                            const resp = await apiGet<any>(`/api/dpz/search?q=${encodeURIComponent(e.target.value)}`);
+                            if (!resp.error) setMatchResults((resp.data?.results || []).filter((r: any) => r.type === 'asset'));
+                          } else {
+                            setMatchResults([]);
+                          }
+                        }}
+                      />
+                      <div className="mt-2 max-h-60 overflow-y-auto space-y-1">
+                        {matchResults.map((r: any) => (
+                          <button
+                            key={r.id}
+                            className="flex items-center gap-3 w-full rounded-lg border p-3 text-left hover:border-primary/20 transition-colors text-sm"
+                            onClick={async () => {
+                              const resp = await apiPost<any>(`/api/dpz/wishlist/${wish.id}/match`, { asset_id: r.id });
+                              if (!resp.error) {
+                                toast({ title: 'Matched!', description: `Linked to ${r.title}` });
+                                setMatchDialogOpen(false);
+                                setMatchQuery('');
+                                fetchWish();
+                              }
+                            }}
+                          >
+                            <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{r.title}</p>
+                              <p className="text-[11px] text-muted-foreground">{r.description}</p>
+                            </div>
+                          </button>
+                        ))}
+                        {matchQuery.length >= 2 && matchResults.length === 0 && (
+                          <p className="text-center text-sm text-muted-foreground py-4">No assets found</p>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {wish.linked_asset ? (
+                <div className="space-y-2">
+                  <button
+                    className="flex items-center gap-3 rounded-lg border p-3 w-full text-left hover:border-primary/20 transition-colors"
+                    onClick={() => navigate(`/assets/${wish.linked_asset!.id}`)}
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{wish.linked_asset.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{wish.linked_asset.type_name}</p>
+                    </div>
+                    <Badge variant="secondary" className="text-[9px]">View</Badge>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground gap-1"
+                    onClick={async () => {
+                      const resp = await apiDelete<any>(`/api/dpz/wishlist/${wish.id}/match`);
+                      if (!resp.error) {
+                        toast({ title: 'Unmatched' });
+                        fetchWish();
+                      }
+                    }}
+                  >
+                    <Unlink className="h-3 w-3" /> Remove match
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center py-6 border border-dashed rounded-lg">
+                  <Link2 className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground mb-2">No asset matched yet</p>
+                  <Button variant="outline" size="sm" onClick={() => setMatchDialogOpen(true)} className="gap-1">
+                    <Search className="h-3 w-3" /> Find matching asset
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right rail */}
