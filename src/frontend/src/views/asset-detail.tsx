@@ -261,11 +261,16 @@ export default function AssetDetailView() {
         {capabilities.length > 0 && (
           <div className="flex items-center gap-1.5 mt-3 flex-wrap">
             <Blocks className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            {capabilities.map((cap: any) => (
-              <Badge key={cap.slug} variant="outline" className="text-[10px] font-mono">
-                {cap.name}
-              </Badge>
-            ))}
+            {capabilities.map((cap: any) => {
+              const catColor = cap.category === 'data' ? 'bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-300 dark:border-blue-800'
+                : cap.category === 'ai' ? 'bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-300 dark:border-purple-800'
+                : 'bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:text-emerald-300 dark:border-emerald-800';
+              return (
+                <Badge key={cap.slug} variant="outline" className={`text-[10px] font-medium ${catColor}`}>
+                  {cap.name}
+                </Badge>
+              );
+            })}
           </div>
         )}
       </div>

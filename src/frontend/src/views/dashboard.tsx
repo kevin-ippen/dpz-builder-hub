@@ -70,6 +70,7 @@ export default function DashboardView() {
   const [wishlist, setWishlist] = useState<WishItem[]>([]);
   const [capabilities, setCapabilities] = useState<CapItem[]>([]);
   const [promotions, setPromotions] = useState<any[]>([]);
+  const [activity, setActivity] = useState<any[]>([]);
 
   useEffect(() => {
     setStaticSegments([]); setDynamicTitle('Dashboard');
@@ -78,7 +79,7 @@ export default function DashboardView() {
 
   useEffect(() => {
     (async () => {
-      const [pR, aR, hR, eR, wR, cR, prR] = await Promise.all([
+      const [pR, aR, hR, eR, wR, cR, prR, actR] = await Promise.all([
         apiGet<PortfolioData>('/api/dpz/portfolio'),
         apiGet<AdoptionData>('/api/dpz/adoption'),
         apiGet<any>('/api/dpz/health'),
@@ -86,6 +87,7 @@ export default function DashboardView() {
         apiGet<any>('/api/dpz/wishlist'),
         apiGet<any>('/api/dpz/capabilities'),
         apiGet<any>('/api/dpz/promotions'),
+        apiGet<any>('/api/dpz/activity?limit=20'),
       ]);
       if (!pR.error && pR.data) setPortfolio(pR.data);
       if (!aR.error && aR.data) setAdoption(aR.data);
@@ -94,6 +96,7 @@ export default function DashboardView() {
       if (!wR.error && wR.data?.items) setWishlist(wR.data.items);
       if (!cR.error && cR.data?.items) setCapabilities(cR.data.items);
       if (!prR.error && prR.data?.items) setPromotions(prR.data.items);
+      if (!actR.error && actR.data?.items) setActivity(actR.data.items);
     })();
   }, [apiGet]);
 
@@ -463,27 +466,70 @@ export default function DashboardView() {
         </TabsContent>
 
         <TabsContent value="activity" className="pt-4">
-          {!adoption ? (
-            <p className="text-center text-muted-foreground py-8">Loading...</p>
-          ) : (
-            <div className="space-y-2">
-              {adoption.recent_activity.map(a => (
-                <button
-                  key={a.id}
-                  className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/50 transition-all"
-                  onClick={() => navigate(`/assets/${a.id}`)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{a.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{a.type_name} · {a.maturity}</p>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground shrink-0">
-                    <RelativeDate date={a.updated_at} />
-                  </span>
-                </button>
-              ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Domain Events */}
+            <div>
+              <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">Event Log</h3>
+              {activity.length > 0 ? (
+                <div className="space-y-2">
+                  {activity.map((evt: any) => {
+                    const label = (evt.event_type || '').replace(/\./g, ' ').replace(/^\w/, (c: string) => c.toUpperCase());
+                    const actor = evt.payload?.actor?.split('@')[0] || 'system';
+                    const detail = evt.payload?.asset_name || evt.payload?.wish_title || evt.payload?.title || '';
+                    const colors: Record<string, string> = {
+                      'asset.created': 'bg-blue-500', 'asset.promoted': 'bg-green-500',
+                      'wish.created': 'bg-purple-500', 'wish.matched': 'bg-emerald-500',
+                      'promotion.requested': 'bg-amber-500', 'promotion.approved': 'bg-green-500',
+                      'promotion.rejected': 'bg-red-500',
+                    };
+                    return (
+                      <div key={evt.id} className="flex items-start gap-3 rounded-lg border p-3">
+                        <div className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', colors[evt.event_type] || 'bg-gray-400')} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium">{label}</p>
+                          {detail && <p className="text-[11px] text-muted-foreground truncate">{detail}</p>}
+                          <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{actor}</p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                          {evt.emitted_at ? <RelativeDate date={evt.emitted_at} /> : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed p-6 text-center">
+                  <p className="text-[12px] text-muted-foreground">No events recorded yet.</p>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Recently Updated Assets */}
+            <div>
+              <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">Recently Updated</h3>
+              {adoption ? (
+                <div className="space-y-2">
+                  {adoption.recent_activity.map(a => (
+                    <button
+                      key={a.id}
+                      className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/50 transition-all"
+                      onClick={() => navigate(`/assets/${a.id}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{a.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{a.type_name} · {a.maturity}</p>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground shrink-0">
+                        <RelativeDate date={a.updated_at} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">Loading...</p>
+              )}
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

@@ -23,7 +23,9 @@ interface MarketplaceAsset {
 
 interface Signal {
   id: string; asset_id: string; signal_type: string;
-  title: string; created_at: string;
+  asset_name: string; signal_source: string;
+  value_numeric: number | null; observed_at: string;
+  title?: string; created_at?: string;
 }
 
 interface Stats { total: number; featured: number; production: number; }
@@ -267,11 +269,14 @@ export default function HomeView() {
                         <Zap className="h-3 w-3 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[12px] font-medium truncate">{s.title}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">{s.signal_type}</p>
+                        <p className="text-[12px] font-medium truncate">{s.asset_name || s.title}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          {s.signal_type.replace(/_/g, ' ')}
+                          {s.value_numeric != null && <span className="ml-1 text-foreground">{s.value_numeric % 1 === 0 ? s.value_numeric : s.value_numeric.toFixed(1)}</span>}
+                        </p>
                       </div>
                       <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                        {new Date(s.created_at).toLocaleDateString()}
+                        {new Date(s.observed_at || s.created_at || '').toLocaleDateString()}
                       </span>
                     </div>
                   ))}

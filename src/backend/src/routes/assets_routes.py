@@ -26,6 +26,25 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+def _emit_domain_event(db, aggregate_id: str, aggregate_type: str, event_type: str, payload: dict):
+    """Insert a domain event into the outbox table. Fire-and-forget."""
+    try:
+        import sqlalchemy as sa
+        idem_key = f"{event_type}-{aggregate_id}-{_uuid.uuid4().hex[:8]}"
+        db.execute(sa.text("""
+            INSERT INTO domain_events (id, aggregate_id, aggregate_type, event_type, payload, idempotency_key, emitted_at)
+            VALUES (:id, :agg_id, :agg_type, :evt, :payload::jsonb, :idem, now())
+            ON CONFLICT (idempotency_key) DO NOTHING
+        """), {
+            "id": str(_uuid.uuid4()), "agg_id": str(aggregate_id),
+            "agg_type": aggregate_type, "evt": event_type,
+            "payload": json.dumps(payload), "idem": idem_key,
+        })
+    except Exception as e:
+        logger.warning(f"Failed to emit domain event {event_type}: {e}")
+
+
 asset_types_router = APIRouter(prefix="/api/asset-types", tags=["Asset Types"])
 assets_router = APIRouter(prefix="/api/assets", tags=["Assets"])
 FEATURE_ID = "assets"
@@ -822,6 +841,11 @@ def create_wishlist_item(demand_in: dict, db: DBSessionDep, current_user: Curren
             "VALUES (:did, :cid) ON CONFLICT DO NOTHING"
         ), {"did": demand_id, "cid": cid})
     db.commit()
+    _emit_domain_event(db, demand_id, "demand", "wish.created", {
+        "title": demand_in.get("title", "Untitled"), "actor": user_email,
+        "category": demand_in.get("category"), "priority": demand_in.get("priority", "medium"),
+    })
+    db.commit()
     return {"id": demand_id, "status": "created"}
 
 
@@ -1157,6 +1181,11 @@ def request_promotion(body: dict, db: DBSessionDep, current_user: CurrentUserDep
         "notes": body.get("notes", ""),
     })
     db.commit()
+    _emit_domain_event(db, body.get("asset_id", ""), "asset", "promotion.requested", {
+        "from_maturity": body.get("from_maturity"), "to_maturity": body.get("to_maturity"),
+        "actor": user_email, "notes": body.get("notes", "")[:200],
+    })
+    db.commit()
     return {"id": promo_id, "status": "pending"}
 
 
@@ -1212,6 +1241,16 @@ def review_promotion(promo_id: str, body: dict, db: DBSessionDep, current_user: 
             ), {"m": promo[1], "aid": str(promo[0])})
 
     db.commit()
+    # Emit domain event for promotion review
+    _promo_info = db.execute(sa.text(
+        "SELECT asset_id, from_maturity, to_maturity FROM promotion_requests WHERE id = :id"
+    ), {"id": promo_id}).fetchone()
+    if _promo_info:
+        _emit_domain_event(db, str(_promo_info[0]), "asset", f"promotion.{decision}", {
+            "from_maturity": _promo_info[1], "to_maturity": _promo_info[2],
+            "reviewer": user_email, "notes": review_notes[:200],
+        })
+        db.commit()
     return {"status": decision, "promo_id": promo_id}
 
 
@@ -1256,6 +1295,11 @@ def match_wish_to_asset(wish_id: str, body: dict, db: DBSessionDep, current_user
         "INSERT INTO asset_demand_links (asset_id, demand_id) VALUES (:aid, :did) ON CONFLICT DO NOTHING"
     ), {"aid": asset_id, "did": wish_id})
 
+    db.commit()
+    user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'unknown')
+    _emit_domain_event(db, wish_id, "demand", "wish.matched", {
+        "asset_id": asset_id, "actor": user_email,
+    })
     db.commit()
     return {"status": "matched", "wish_id": wish_id, "asset_id": asset_id}
 
@@ -1590,6 +1634,26 @@ def get_marketplace_stats(db: DBSessionDep):
     installs = db.execute(sa.text("SELECT COALESCE(sum(install_count), 0) FROM assets")).scalar() or 0
     contributors = db.execute(sa.text("SELECT count(DISTINCT created_by) FROM assets WHERE created_by IS NOT NULL")).scalar() or 0
     return {"total_assets": total, "total_versions": versions, "total_installs": int(installs), "contributors": contributors}
+
+
+# ─── Activity Feed (domain events) ───────────────────────────────────
+
+@dpz_router.get("/activity")
+def list_activity(db: DBSessionDep, limit: int = Query(20, ge=1, le=100)):
+    """Recent domain events for the activity feed."""
+    import sqlalchemy as sa
+    rows = db.execute(sa.text("""
+        SELECT id, aggregate_id, aggregate_type, event_type, payload,
+               emitted_at
+        FROM domain_events
+        ORDER BY emitted_at DESC
+        LIMIT :lim
+    """), {"lim": limit})
+    return {"items": [{
+        "id": str(r[0]), "aggregate_id": str(r[1]), "aggregate_type": r[2],
+        "event_type": r[3], "payload": r[4] if isinstance(r[4], dict) else json.loads(r[4]) if r[4] else {},
+        "emitted_at": r[5].isoformat() if r[5] else None,
+    } for r in rows]}
 
 
 # ─── Signals & Evidence routes ───────────────────────────────────────
