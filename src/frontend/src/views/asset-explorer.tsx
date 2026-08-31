@@ -78,7 +78,11 @@ export default function AssetExplorerView() {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [assetsTotal, setAssetsTotal] = useState(0);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
-  const [nameFilter, setNameFilter] = useState('');
+  // Init nameFilter from URL ?q= param (from home search)
+  const [nameFilter, setNameFilter] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('q') || '';
+  });
   const [debouncedNameFilter, setDebouncedNameFilter] = useState('');
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
   const [previewAssetTitle, setPreviewAssetTitle] = useState('');
@@ -87,6 +91,9 @@ export default function AssetExplorerView() {
   const [maturityFilter, setMaturityFilter] = useState<string | null>(null);
   const [funnelCounts, setFunnelCounts] = useState<Record<string, number>>({});
   const [showLabProjects, setShowLabProjects] = useState(false);
+  const [capMap, setCapMap] = useState<Record<string, { slug: string; name: string; category: string }[]>>({});
+  const [allCaps, setAllCaps] = useState<{ slug: string; name: string; category: string }[]>([]);
+  const [capFilter, setCapFilter] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -173,8 +180,14 @@ export default function AssetExplorerView() {
   // Fetch hero images for card grid
   useEffect(() => {
     (async () => {
-      const resp = await apiGet<any>('/api/dpz/images/heroes');
-      if (!resp.error && resp.data?.heroes) setHeroImages(resp.data.heroes);
+      const [heroResp, capsResp, capsListResp] = await Promise.all([
+        apiGet<any>('/api/dpz/images/heroes'),
+        apiGet<any>('/api/dpz/asset-capabilities-bulk'),
+        apiGet<any>('/api/dpz/capabilities'),
+      ]);
+      if (!heroResp.error && heroResp.data?.heroes) setHeroImages(heroResp.data.heroes);
+      if (!capsResp.error && capsResp.data?.by_asset) setCapMap(capsResp.data.by_asset);
+      if (!capsListResp.error && capsListResp.data?.items) setAllCaps(capsListResp.data.items);
     })();
   }, [apiGet]);
 
@@ -261,9 +274,12 @@ export default function AssetExplorerView() {
 
   const LAB_MATURITIES = ['idea', 'triaged', 'poc'];
   const displayedAssets = useMemo(() => {
-    if (showLabProjects) return assets;
-    return assets.filter((a: any) => !LAB_MATURITIES.includes(a.maturity));
-  }, [assets, showLabProjects]);
+    let result = showLabProjects ? assets : assets.filter((a: any) => !LAB_MATURITIES.includes(a.maturity));
+    if (capFilter) {
+      result = result.filter((a: any) => capMap[a.id]?.some((c: any) => c.slug === capFilter));
+    }
+    return result;
+  }, [assets, showLabProjects, capFilter, capMap]);
 
   const openDeleteDialog = (id: string) => {
     if (!canAdmin) {
@@ -550,6 +566,28 @@ export default function AssetExplorerView() {
             {showLabProjects ? 'Showing Lab projects' : 'Include Lab projects'}
           </button>
         </div>
+        {/* Capability filter chips */}
+        {allCaps.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mr-1">Caps:</span>
+            <button
+              className={cn('px-2 py-0.5 rounded-full text-[10px] font-mono transition-colors border', !capFilter ? 'bg-primary/10 text-primary border-primary/30' : 'hover:bg-muted border-transparent text-muted-foreground')}
+              onClick={() => setCapFilter(null)}
+            >All</button>
+            {allCaps.map((c: any) => (
+              <button
+                key={c.slug}
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-[10px] font-mono transition-colors border',
+                  capFilter === c.slug
+                    ? 'bg-primary/10 text-primary border-primary/30'
+                    : 'hover:bg-muted text-muted-foreground border-transparent'
+                )}
+                onClick={() => setCapFilter(capFilter === c.slug ? null : c.slug)}
+              >{c.name}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {componentError && (
@@ -714,6 +752,7 @@ export default function AssetExplorerView() {
                         team={(asset as any).team || undefined}
                         updatedAt={asset.updated_at || undefined}
                         heroImageUrl={heroImages[asset.id]?.image_url}
+                        capabilities={capMap[asset.id]}
                       />
                     ))}
                     {displayedAssets.length === 0 && !assetsLoading && (

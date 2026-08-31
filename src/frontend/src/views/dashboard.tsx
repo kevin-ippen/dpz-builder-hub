@@ -79,7 +79,7 @@ export default function DashboardView() {
 
   useEffect(() => {
     (async () => {
-      const [pR, aR, hR, eR, wR, cR, prR, actR] = await Promise.all([
+      const [pR, aR, hR, eR, wR, cR, prR, actR, bulkCaps] = await Promise.all([
         apiGet<PortfolioData>('/api/dpz/portfolio'),
         apiGet<AdoptionData>('/api/dpz/adoption'),
         apiGet<any>('/api/dpz/health'),
@@ -88,6 +88,7 @@ export default function DashboardView() {
         apiGet<any>('/api/dpz/capabilities'),
         apiGet<any>('/api/dpz/promotions'),
         apiGet<any>('/api/dpz/activity?limit=20'),
+        apiGet<any>('/api/dpz/asset-capabilities-bulk'),
       ]);
       if (!pR.error && pR.data) setPortfolio(pR.data);
       if (!aR.error && aR.data) setAdoption(aR.data);
@@ -97,8 +98,18 @@ export default function DashboardView() {
       if (!cR.error && cR.data?.items) setCapabilities(cR.data.items);
       if (!prR.error && prR.data?.items) setPromotions(prR.data.items);
       if (!actR.error && actR.data?.items) setActivity(actR.data.items);
+      // Build capAssetCounts from bulk caps
+      if (!bulkCaps.error && bulkCaps.data?.by_asset) {
+        const counts: Record<string, number> = {};
+        Object.values(bulkCaps.data.by_asset as Record<string, any[]>).forEach(caps => {
+          caps.forEach((c: any) => { counts[c.slug] = (counts[c.slug] || 0) + 1; });
+        });
+        setCapAssetCounts(counts);
+      }
     })();
   }, [apiGet]);
+
+  const [capAssetCounts, setCapAssetCounts] = useState<Record<string, number>>({});
 
   // Derived stats
   const prodCount = useMemo(() => portfolio?.by_maturity.find(m => m.stage === 'production')?.count || 0, [portfolio]);
@@ -235,6 +246,30 @@ export default function DashboardView() {
                   </div>
                 </CardContent>
               </Card>
+              {/* Capability Heatmap */}
+              {capabilities.length > 0 && (
+                <Card className="md:col-span-2">
+                  <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Capability Coverage</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {capabilities.map((c: any) => {
+                        const count = capAssetCounts[c.slug] || 0;
+                        const catClr = c.category === 'data'
+                          ? 'border-blue-200 bg-blue-500/5 dark:border-blue-800'
+                          : c.category === 'ai'
+                          ? 'border-purple-200 bg-purple-500/5 dark:border-purple-800'
+                          : 'border-emerald-200 bg-emerald-500/5 dark:border-emerald-800';
+                        return (
+                          <div key={c.slug} className={cn('rounded-lg border px-3 py-2 text-center min-w-[90px]', catClr)}>
+                            <div className="text-lg font-bold">{count}</div>
+                            <div className="text-[10px] font-mono text-muted-foreground truncate max-w-[80px]">{c.name}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
         </TabsContent>

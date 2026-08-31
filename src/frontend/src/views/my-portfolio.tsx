@@ -46,6 +46,7 @@ export default function MyPortfolioView() {
 
   const [assets, setAssets] = useState<PortfolioAsset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [capMap, setCapMap] = useState<Record<string, { slug: string; name: string; category: string }[]>>({});
   const [user, setUser] = useState('');
 
   useEffect(() => {
@@ -57,11 +58,15 @@ export default function MyPortfolioView() {
   const fetchMyAssets = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await apiGet<any>('/api/dpz/portfolio/my-assets');
+      const [resp, capsResp] = await Promise.all([
+        apiGet<any>('/api/dpz/portfolio/my-assets'),
+        apiGet<any>('/api/dpz/asset-capabilities-bulk'),
+      ]);
       if (!resp.error && resp.data) {
         setAssets(resp.data.items || []);
         setUser(resp.data.user || '');
       }
+      if (!capsResp.error && capsResp.data?.by_asset) setCapMap(capsResp.data.by_asset);
     } catch {} finally { setLoading(false); }
   }, [apiGet]);
 
@@ -188,6 +193,14 @@ export default function MyPortfolioView() {
                       </div>
                       {asset.description && (
                         <p className="text-[12px] text-muted-foreground truncate">{asset.description}</p>
+                      )}
+                      {capMap[asset.id]?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {capMap[asset.id].slice(0, 3).map(c => {
+                            const clr = c.category === 'data' ? 'bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-300 dark:border-blue-800' : c.category === 'ai' ? 'bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-300 dark:border-purple-800' : 'bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:text-emerald-300 dark:border-emerald-800';
+                            return <span key={c.slug} className={cn('px-1.5 py-0.5 text-[9px] font-mono rounded border', clr)}>{c.name}</span>;
+                          })}
+                        </div>
                       )}
                     </div>
                     <div className="flex items-center gap-4 shrink-0">

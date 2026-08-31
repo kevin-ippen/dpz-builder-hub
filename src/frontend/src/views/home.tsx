@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, FlaskConical, Upload, BarChart3, ArrowRight,
-  TrendingUp, Zap, Search, Package,
+  TrendingUp, Zap, Search, Package, ThumbsUp, Lightbulb,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,18 @@ interface Signal {
   title?: string; created_at?: string;
 }
 
+interface CapChip { slug: string; name: string; category: string; }
+interface WishTeaser { id: string; title: string; upvotes: number; status: string; }
 interface Stats { total: number; featured: number; production: number; }
+
+const AV_COLORS = ['bg-blue-500','bg-emerald-500','bg-purple-500','bg-amber-500','bg-rose-500','bg-cyan-500','bg-indigo-500','bg-teal-500'];
+function avColor(s: string) { let h=0; for(let i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return AV_COLORS[Math.abs(h)%AV_COLORS.length]; }
+
+const CAP_CLR: Record<string,string> = {
+  data: 'bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-300 dark:border-blue-800',
+  ai: 'bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-300 dark:border-purple-800',
+  platform: 'bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:text-emerald-300 dark:border-emerald-800',
+};
 
 // ─── Maturity config (inline, small) ────────────────────────────────────
 const MATURITY_BADGES: Record<string, { label: string; color: string }> = {
@@ -41,7 +52,7 @@ const MATURITY_BADGES: Record<string, { label: string; color: string }> = {
 };
 
 // ─── Compact asset card for featured spotlight ──────────────────────────
-function SpotlightCard({ asset }: { asset: MarketplaceAsset }) {
+function SpotlightCard({ asset, caps }: { asset: MarketplaceAsset; caps?: CapChip[] }) {
   const navigate = useNavigate();
   const badge = MATURITY_BADGES[asset.maturity] || MATURITY_BADGES.idea;
   return (
@@ -68,8 +79,22 @@ function SpotlightCard({ asset }: { asset: MarketplaceAsset }) {
         <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-2 min-h-[2.5em]">
           {asset.description || 'No description provided.'}
         </p>
+        {caps && caps.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {caps.slice(0, 3).map(c => (
+              <span key={c.slug} className={cn('px-1.5 py-0.5 text-[9px] font-mono rounded border', CAP_CLR[c.category] || CAP_CLR.platform)}>{c.name}</span>
+            ))}
+          </div>
+        )}
         <div className="flex items-center justify-between mt-3 pt-2 border-t border-dashed text-[11px] text-muted-foreground">
-          <span className="truncate max-w-[100px]">{asset.created_by || 'Unknown'}</span>
+          {asset.created_by ? (
+            <div className="flex items-center gap-1.5">
+              <div className={cn('w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0', avColor(asset.created_by))}>
+                {asset.created_by.charAt(0).toUpperCase()}
+              </div>
+              <span className="truncate max-w-[80px]">{asset.created_by.split('@')[0]}</span>
+            </div>
+          ) : <span>Unknown</span>}
           <span className="font-mono">{asset.install_count} adopts</span>
         </div>
       </CardContent>
@@ -117,6 +142,8 @@ export default function HomeView() {
   const [trending, setTrending] = useState<MarketplaceAsset[]>([]);
   const [recent, setRecent] = useState<MarketplaceAsset[]>([]);
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [capMap, setCapMap] = useState<Record<string, CapChip[]>>({});
+  const [topWishes, setTopWishes] = useState<WishTeaser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -124,10 +151,12 @@ export default function HomeView() {
   const fetchHome = useCallback(async () => {
     setLoading(true);
     try {
-      const [mp, st, sig] = await Promise.all([
+      const [mp, st, sig, capsRes, wishRes] = await Promise.all([
         apiGet<any>('/api/dpz/marketplace'),
         apiGet<any>('/api/dpz/marketplace/stats'),
         apiGet<any>('/api/dpz/signals?limit=8'),
+        apiGet<any>('/api/dpz/asset-capabilities-bulk'),
+        apiGet<any>('/api/dpz/wishlist'),
       ]);
       if (!mp.error && mp.data) {
         setFeatured((mp.data.featured || []).slice(0, 3));
@@ -137,6 +166,8 @@ export default function HomeView() {
       if (!st.error && st.data) setStats(st.data);
       if (!sig.error && Array.isArray(sig.data?.items)) setSignals(sig.data.items.slice(0, 6));
       else if (!sig.error && Array.isArray(sig.data)) setSignals(sig.data.slice(0, 6));
+      if (!capsRes.error && capsRes.data?.by_asset) setCapMap(capsRes.data.by_asset);
+      if (!wishRes.error && wishRes.data?.items) setTopWishes(wishRes.data.items.filter((w: any) => w.status === 'open').slice(0, 3));
     } catch {} finally {
       setLoading(false);
     }
@@ -221,7 +252,7 @@ export default function HomeView() {
                 }
               />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {featured.map((a) => <SpotlightCard key={a.id} asset={a} />)}
+                {featured.map((a) => <SpotlightCard key={a.id} asset={a} caps={capMap[a.id]} />)}
               </div>
             </section>
           )}
@@ -247,7 +278,12 @@ export default function HomeView() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{a.name}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">{a.type_name} · {a.install_count} adopts</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] text-muted-foreground">{a.type_name} · {a.install_count} adopts</span>
+                          {capMap[a.id]?.slice(0, 2).map(c => (
+                            <span key={c.slug} className={cn('px-1 py-0 text-[8px] font-mono rounded border hidden md:inline', CAP_CLR[c.category] || CAP_CLR.platform)}>{c.name}</span>
+                          ))}
+                        </div>
                       </div>
                       <Badge className={cn('text-[8px] font-mono uppercase border-0 shrink-0', (MATURITY_BADGES[a.maturity] || MATURITY_BADGES.idea).color)}>
                         {(MATURITY_BADGES[a.maturity] || MATURITY_BADGES.idea).label}
@@ -308,9 +344,43 @@ export default function HomeView() {
                     className="text-left rounded-xl border p-4 hover:shadow-card-hover hover:border-primary/20 hover:-translate-y-0.5 transition-all group"
                     onClick={() => navigate(`/assets/${a.id}`)}
                   >
-                    <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{a.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{a.name}</p>
+                      {a.latest_version && (
+                        <Badge variant="outline" className="text-[9px] font-mono shrink-0 px-1.5 py-0">v{a.latest_version}</Badge>
+                      )}
+                    </div>
                     <p className="text-[11px] text-muted-foreground truncate mt-0.5">{a.type_name}</p>
                     <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1">{a.description || ''}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+          {/* ═══ Top Wishes ═══ */}
+          {topWishes.length > 0 && (
+            <section>
+              <SectionHeader
+                icon={Lightbulb}
+                title="Top Wishes"
+                action={
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate('/wishlist')}>
+                    View all <ArrowRight className="ml-1 h-3 w-3" />
+                  </Button>
+                }
+              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {topWishes.map(w => (
+                  <button
+                    key={w.id}
+                    className="text-left rounded-xl border p-4 hover:shadow-card-hover hover:border-primary/20 transition-all group"
+                    onClick={() => navigate(`/wishlist/${w.id}`)}
+                  >
+                    <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{w.title}</p>
+                    <div className="flex items-center gap-2 mt-2 text-[11px] text-muted-foreground">
+                      <ThumbsUp className="h-3 w-3" />
+                      <span className="font-mono font-semibold text-foreground">{w.upvotes}</span> upvotes
+                    </div>
                   </button>
                 ))}
               </div>

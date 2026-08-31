@@ -73,6 +73,14 @@ function relativeTimeShort(dateStr?: string): string {
   return `${Math.floor(days / 30)}mo`;
 }
 
+interface CapChipData { slug: string; name: string; category: string; }
+
+const CAP_CLR: Record<string,string> = {
+  data: 'bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-300 dark:border-blue-800',
+  ai: 'bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-300 dark:border-purple-800',
+  platform: 'bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:text-emerald-300 dark:border-emerald-800',
+};
+
 interface AssetCardProps {
   id: string;
   name: string;
@@ -84,10 +92,11 @@ interface AssetCardProps {
   team?: string;
   updatedAt?: string;
   heroImageUrl?: string;
+  capabilities?: CapChipData[];
 }
 
 export function AssetCard({
-  id, name, description, typeName, maturity, publicationScope, owner, team, updatedAt, heroImageUrl,
+  id, name, description, typeName, maturity, publicationScope, owner, team, updatedAt, heroImageUrl, capabilities,
 }: AssetCardProps) {
   const navigate = useNavigate();
   const [heroError, setHeroError] = useState(false);
@@ -159,6 +168,15 @@ export function AssetCard({
           </p>
         )}
 
+        {/* Capability chips */}
+        {capabilities && capabilities.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {capabilities.slice(0, 3).map(c => (
+              <span key={c.slug} className={cn('px-1.5 py-0.5 text-[9px] font-mono rounded border', CAP_CLR[c.category] || CAP_CLR.platform)}>{c.name}</span>
+            ))}
+            {capabilities.length > 3 && <span className="text-[9px] text-muted-foreground">+{capabilities.length - 3}</span>}
+          </div>
+        )}
         {/* Owner + team + updated */}
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
           {owner && (
