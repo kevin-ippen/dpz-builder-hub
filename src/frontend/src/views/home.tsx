@@ -264,7 +264,7 @@ export default function HomeView() {
               {signals.length > 0 ? (
                 <div className="space-y-2">
                   {signals.map((s) => (
-                    <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    <button key={s.id} className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/50 hover:border-primary/20 transition-all" onClick={() => navigate(`/assets/${s.asset_id}`)}>
                       <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         <Zap className="h-3 w-3 text-primary" />
                       </div>
@@ -278,7 +278,7 @@ export default function HomeView() {
                       <span className="text-[10px] text-muted-foreground font-mono shrink-0">
                         {new Date(s.observed_at || s.created_at || '').toLocaleDateString()}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : (

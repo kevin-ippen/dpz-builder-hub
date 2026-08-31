@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { MATURITY_CONFIG } from '@/components/assets/asset-card';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
+interface CapChip { slug: string; name: string; category: string; }
+
 interface LabAsset {
   id: string;
   name: string;
@@ -21,6 +23,7 @@ interface LabAsset {
   latest_version: string | null;
   created_by: string | null;
   created_at: string;
+  capabilities?: CapChip[];
 }
 
 const DOMAIN_FILTERS = [
@@ -83,9 +86,30 @@ function LabCard({ asset, onUpvote }: { asset: LabAsset; onUpvote: (id: string) 
           </div>
         </div>
 
-        <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-2 mb-3 min-h-[2.5em]">
+        <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-2 mb-2 min-h-[2.5em]">
           {asset.description || 'No description yet — new experiment in progress.'}
         </p>
+
+        {/* Capability chips */}
+        {asset.capabilities && asset.capabilities.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {asset.capabilities.slice(0, 3).map((cap) => {
+              const catColor = cap.category === 'data'
+                ? 'bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-300 dark:border-blue-800'
+                : cap.category === 'ai'
+                ? 'bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-300 dark:border-purple-800'
+                : 'bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:text-emerald-300 dark:border-emerald-800';
+              return (
+                <span key={cap.slug} className={cn('px-1.5 py-0.5 text-[9px] font-mono rounded border', catColor)}>
+                  {cap.name}
+                </span>
+              );
+            })}
+            {asset.capabilities.length > 3 && (
+              <span className="text-[9px] text-muted-foreground">+{asset.capabilities.length - 3}</span>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2 border-t border-dashed">
           <div className="flex items-center gap-3">
@@ -132,14 +156,16 @@ export default function LabView() {
   const [assets, setAssets] = useState<LabAsset[]>([]);
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [heroImages, setHeroImages] = useState<Record<string, { image_url: string }>>({});
+  const [heroImages, setHeroImages] = useState<Record<string, { image_url: string }>>({}); 
+  const [capMap, setCapMap] = useState<Record<string, CapChip[]>>({});
 
   const fetchLab = useCallback(async () => {
     setLoading(true);
     try {
-      const [assetsRes, heroes] = await Promise.all([
+      const [assetsRes, heroes, capsRes] = await Promise.all([
         apiGet<any>('/api/dpz/marketplace'),
         apiGet<any>('/api/dpz/images/heroes'),
+        apiGet<any>('/api/dpz/asset-capabilities-bulk'),
       ]);
       if (!assetsRes.error && assetsRes.data) {
         // Combine all marketplace results and filter to lab maturities
@@ -155,9 +181,13 @@ export default function LabView() {
           seen.add(a.id);
           return LAB_MATURITIES.includes(a.maturity);
         });
-        setAssets(labAssets);
+        // Merge capabilities from bulk fetch
+        const capData = (!capsRes.error && capsRes.data?.by_asset) ? capsRes.data.by_asset : {};
+        const enriched = labAssets.map((a: any) => ({ ...a, capabilities: capData[a.id] || [] }));
+        setAssets(enriched);
       }
       if (!heroes.error && heroes.data?.heroes) setHeroImages(heroes.data.heroes);
+      if (!capsRes.error && capsRes.data?.by_asset) setCapMap(capsRes.data.by_asset);
     } catch {} finally {
       setLoading(false);
     }

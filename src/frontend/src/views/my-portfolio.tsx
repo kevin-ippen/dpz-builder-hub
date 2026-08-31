@@ -144,7 +144,12 @@ export default function MyPortfolioView() {
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
               Submit your first idea, POC, or production asset to start building your portfolio.
             </p>
-            <Button onClick={() => navigate('/submit')} className="mt-2">Submit your first asset</Button>
+            <div className="flex items-center justify-center gap-3 mt-2">
+              <Button onClick={() => navigate('/submit')}>Submit your first asset</Button>
+              <Button variant="outline" onClick={() => navigate('/lab')}>
+                <FlaskConical className="h-3.5 w-3.5 mr-1.5" /> Explore the Lab
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

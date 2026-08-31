@@ -688,24 +688,38 @@ export default function AssetExplorerView() {
             </CardHeader>
             <CardContent>
               {viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {displayedAssets.map((asset) => (
-                    <AssetCard
-                      key={asset.id}
-                      id={asset.id}
-                      name={asset.name}
-                      description={asset.description || undefined}
-                      typeName={asset.asset_type_name || undefined}
-                      maturity={(asset as any).maturity || undefined}
-                      publicationScope={(asset as any).publication_scope || undefined}
-                      owner={asset.created_by || undefined}
-                      updatedAt={asset.updated_at || undefined}
-                      heroImageUrl={heroImages[asset.id]?.image_url}
+                <div className="space-y-4">
+                  {/* Search bar for grid mode */}
+                  <div className="relative max-w-sm">
+                    <Box className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Filter assets..."
+                      value={nameFilter}
+                      onChange={(e) => setNameFilter(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                  ))}
-                  {displayedAssets.length === 0 && !assetsLoading && (
-                    <div className="col-span-full text-center py-12 text-muted-foreground">No assets found.</div>
-                  )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {displayedAssets.map((asset) => (
+                      <AssetCard
+                        key={asset.id}
+                        id={asset.id}
+                        name={asset.name}
+                        description={asset.description || undefined}
+                        typeName={asset.asset_type_name || undefined}
+                        maturity={(asset as any).maturity || undefined}
+                        publicationScope={(asset as any).publication_scope || undefined}
+                        owner={(asset as any).owner_email || asset.created_by || undefined}
+                        team={(asset as any).team || undefined}
+                        updatedAt={asset.updated_at || undefined}
+                        heroImageUrl={heroImages[asset.id]?.image_url}
+                      />
+                    ))}
+                    {displayedAssets.length === 0 && !assetsLoading && (
+                      <div className="col-span-full text-center py-12 text-muted-foreground">No assets found.</div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <DataTable

@@ -1102,6 +1102,29 @@ def update_asset_governance(asset_id: str, body: dict, db: DBSessionDep, current
 
 
 # ════════════════════════════════════════════════════
+# Bulk asset capabilities (for card grids)
+# ════════════════════════════════════════════════════
+
+@dpz_router.get("/asset-capabilities-bulk")
+def bulk_asset_capabilities(db: DBSessionDep):
+    """Return all asset-capability links grouped by asset_id."""
+    import sqlalchemy as sa
+    rows = db.execute(sa.text("""
+        SELECT ac.asset_id, c.slug, c.name, c.category
+        FROM asset_capabilities ac
+        JOIN capabilities c ON ac.capability_id = c.id
+        ORDER BY ac.asset_id, c.sort_order
+    """))
+    result: dict = {}
+    for r in rows:
+        aid = str(r[0])
+        if aid not in result:
+            result[aid] = []
+        result[aid].append({"slug": r[1], "name": r[2], "category": r[3]})
+    return {"by_asset": result}
+
+
+# ════════════════════════════════════════════════════
 # DPZ Search (cross-entity: assets, wishes, capabilities)
 # ════════════════════════════════════════════════════
 

@@ -49,6 +49,30 @@ const MATURITY_CONFIG: Record<string, {
 
 const MATURITY_ORDER = ['idea', 'triaged', 'poc', 'validating', 'production_candidate', 'production'];
 
+// Deterministic color from string for avatar initials
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500',
+  'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-teal-500',
+];
+function avatarColor(str: string) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function relativeTimeShort(dateStr?: string): string {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d`;
+  return `${Math.floor(days / 30)}mo`;
+}
+
 interface AssetCardProps {
   id: string;
   name: string;
@@ -57,12 +81,13 @@ interface AssetCardProps {
   maturity?: string;
   publicationScope?: string;
   owner?: string;
+  team?: string;
   updatedAt?: string;
   heroImageUrl?: string;
 }
 
 export function AssetCard({
-  id, name, description, typeName, maturity, publicationScope, owner, updatedAt, heroImageUrl,
+  id, name, description, typeName, maturity, publicationScope, owner, team, updatedAt, heroImageUrl,
 }: AssetCardProps) {
   const navigate = useNavigate();
   const [heroError, setHeroError] = useState(false);
@@ -134,12 +159,24 @@ export function AssetCard({
           </p>
         )}
 
-        {/* Owner + scope */}
+        {/* Owner + team + updated */}
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
-          {owner && <span className="truncate max-w-[140px]">{owner}</span>}
-          {owner && publicationScope && publicationScope !== 'draft' && <span className="text-border">·</span>}
-          {publicationScope && publicationScope !== 'draft' && (
-            <span className="font-mono uppercase tracking-wider">{publicationScope}</span>
+          {owner && (
+            <>
+              <div className={cn('w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0', avatarColor(owner))}>
+                {owner.charAt(0).toUpperCase()}
+              </div>
+              <span className="truncate max-w-[100px]">{owner.split('@')[0]}</span>
+            </>
+          )}
+          {team && (
+            <>
+              <span className="text-border">·</span>
+              <span className="font-mono text-[10px] truncate max-w-[80px]">{team}</span>
+            </>
+          )}
+          {updatedAt && (
+            <span className="ml-auto font-mono text-[10px] shrink-0">{relativeTimeShort(updatedAt)}</span>
           )}
         </div>
       </div>

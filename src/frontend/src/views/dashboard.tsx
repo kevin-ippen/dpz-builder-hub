@@ -169,7 +169,7 @@ export default function DashboardView() {
       )}
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview" className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5" /> Overview
           </TabsTrigger>

@@ -287,8 +287,12 @@ export default function AssetDetailView() {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-
-
+          <TabsTrigger value="governance">
+            <Shield className="h-3 w-3 mr-1" />Governance
+          </TabsTrigger>
+          <TabsTrigger value="evidence">
+            <TrendingUp className="h-3 w-3 mr-1" />Evidence
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-6">
@@ -377,12 +381,18 @@ export default function AssetDetailView() {
             </CardContent>
           </Card>
 
-          {/* Governance & Enterprise Metadata */}
-          {(governance.owner_email || governance.team || governance.uc_catalog || governance.jira_key || governance.sla_tier) && (
+          {/* Properties */}
+          <PropertiesCard properties={asset.properties} />
+
+        </TabsContent>
+
+        {/* ─── Governance Tab ─── */}
+        <TabsContent value="governance" className="mt-4 space-y-6">
+          {(governance.owner_email || governance.team || governance.uc_catalog || governance.jira_key || governance.sla_tier) ? (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
-                  <Shield className="h-3 w-3" /> Governance
+                  <Shield className="h-3 w-3" /> Enterprise Metadata
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -454,12 +464,23 @@ export default function AssetDetailView() {
                 </div>
               </CardContent>
             </Card>
+          ) : (
+            <div className="rounded-lg border border-dashed p-8 text-center">
+              <Shield className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No governance metadata configured yet.</p>
+            </div>
           )}
+        </TabsContent>
 
-          {/* Properties */}
-          <PropertiesCard properties={asset.properties} />
-
-
+        {/* ─── Evidence Tab ─── */}
+        <TabsContent value="evidence" className="mt-4 space-y-6">
+          <EvidenceScoreCard
+            evidenceScore={evidenceSummary?.evidence_score}
+            signalTypes={evidenceSummary?.signal_types}
+            totalSignals={evidenceSummary?.total_signals}
+            lastSignalAt={evidenceSummary?.last_signal_at}
+          />
+          <SignalTimeline assetId={asset.id} />
         </TabsContent>
 
       </Tabs>
@@ -610,14 +631,14 @@ export default function AssetDetailView() {
         {/* Version timeline */}
         <VersionTimeline assetId={asset.id} />
 
-        {/* Signals & Evidence */}
-        <EvidenceScoreCard
-          evidenceScore={evidenceSummary?.evidence_score}
-          signalTypes={evidenceSummary?.signal_types}
-          totalSignals={evidenceSummary?.total_signals}
-          lastSignalAt={evidenceSummary?.last_signal_at}
-        />
-        <SignalTimeline assetId={asset.id} />
+        {/* Signals summary (compact) */}
+        {(evidenceSummary?.total_signals ?? 0) > 0 && (
+          <div className="rounded-xl border p-4">
+            <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Evidence</h3>
+            <div className="text-lg font-bold">{evidenceSummary?.evidence_score ?? 0}%</div>
+            <p className="text-[10px] text-muted-foreground">{evidenceSummary?.total_signals} signals</p>
+          </div>
+        )}
 
 
         {/* Similar assets */}

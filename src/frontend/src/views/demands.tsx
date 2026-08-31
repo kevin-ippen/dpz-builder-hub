@@ -305,6 +305,24 @@ export default function WishlistView() {
         </Dialog>
       </div>
 
+      {/* Stats bar */}
+      {!loading && items.length > 0 && (
+        <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <strong className="text-foreground text-sm">{items.filter(i => i.status === 'open').length}</strong> open
+          </span>
+          <span className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <strong className="text-foreground text-sm">{items.filter(i => i.status === 'matched').length}</strong> matched
+          </span>
+          <span className="flex items-center gap-1.5">
+            <ThumbsUp className="h-3 w-3" />
+            <strong className="text-foreground text-sm">{items.reduce((s, i) => s + i.upvotes, 0)}</strong> total upvotes
+          </span>
+        </div>
+      )}
+
       {/* Category filter pills */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {CATEGORY_FILTERS.map((c) => (
