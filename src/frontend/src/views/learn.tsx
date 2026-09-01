@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   GraduationCap, ExternalLink, FileText, GitBranch, Megaphone,
   BookOpen, Search, Calendar, Plus, Users, Radio, Layers,
-  Database, Bot, Shield, Layout, ChevronRight, Zap,
+  Database, Bot, Shield, Layout, ChevronRight, Zap, RefreshCw, Loader2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -232,6 +232,7 @@ export default function LearnView() {
   const [newUrl, setNewUrl] = useState('');
   const [newTags, setNewTags] = useState('');
   const [newAuthor, setNewAuthor] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     setStaticSegments([]);
@@ -336,7 +337,32 @@ export default function LearnView() {
             </button>
           );
         })}
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          {channel === 'platform' && (
+            <Button
+              variant="outline" size="sm" className="gap-1.5 rounded-lg text-xs"
+              disabled={syncing}
+              onClick={async () => {
+                setSyncing(true);
+                try {
+                  const resp = await apiPost<any>('/api/dpz/learn/sync-feeds', { max_age_days: 90, limit: 200 });
+                  if (resp.error) throw new Error(resp.error);
+                  const d = resp.data;
+                  toast({ title: 'Feed synced', description: `${d.synced} new items from Databricks feeds (${d.skipped} skipped).` });
+                  // Reload platform items
+                  const pr = await apiGet<any>('/api/dpz/learn?channel=platform');
+                  if (!pr.error && pr.data?.items) setPlatformItems(pr.data.items);
+                  const sr = await apiGet<any>('/api/dpz/learn/stats');
+                  if (!sr.error && sr.data) setStats(sr.data);
+                } catch (err: any) {
+                  toast({ variant: 'destructive', title: 'Sync failed', description: err.message });
+                } finally { setSyncing(false); }
+              }}
+            >
+              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Sync Feed
+            </Button>
+          )}
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5 rounded-lg text-xs">

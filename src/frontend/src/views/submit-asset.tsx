@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lightbulb, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Database, Link2, Users } from 'lucide-react';
+import { Lightbulb, ArrowRight, Sparkles, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Database, Link2, Users, GitBranch, FolderOpen, Loader2, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,12 @@ export default function SubmitAssetView() {
   const [allCapabilities, setAllCapabilities] = useState<CapItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Auto-discover
+  const [discoverUrl, setDiscoverUrl] = useState('');
+  const [discoverPath, setDiscoverPath] = useState('');
+  const [discovering, setDiscovering] = useState(false);
+  const [discovered, setDiscovered] = useState(false);
 
   // Anti-duplication
   interface SimilarMatch { asset_id: string; name: string; type_name: string; maturity: string; score: number; }
@@ -80,6 +86,51 @@ export default function SubmitAssetView() {
   useEffect(() => {
     if (currentUser?.email && !ownerEmail) setOwnerEmail(currentUser.email);
   }, [currentUser, ownerEmail]);
+
+  const handleDiscover = useCallback(async () => {
+    const input = discoverUrl.trim() || discoverPath.trim();
+    if (!input) return;
+    setDiscovering(true);
+    try {
+      const payload = discoverUrl.trim()
+        ? { repo_url: discoverUrl.trim() }
+        : { workspace_path: discoverPath.trim() };
+      const resp = await apiPost<any>('/api/dpz/discover', payload);
+      if (resp.error) throw new Error(resp.error);
+      const d = resp.data;
+      if (d.error) {
+        toast({ variant: 'destructive', title: 'Discovery issue', description: d.error });
+      }
+      // Auto-fill form
+      if (d.name) setName(d.name);
+      if (d.description) setDescription(d.description);
+      if (d.repo_url) setRepoUrl(d.repo_url);
+      if (d.workspace_path) {
+        // Store in properties area
+      }
+      // Auto-select type if we can match
+      if (d.type_suggestion && assetTypes.length > 0) {
+        const match = assetTypes.find(t =>
+          t.name.toLowerCase().includes(d.type_suggestion) ||
+          t.category?.toLowerCase().includes(d.type_suggestion)
+        );
+        if (match) setAssetTypeId(match.id);
+      }
+      // Auto-tag capabilities
+      if (d.capabilities?.length > 0 && allCapabilities.length > 0) {
+        const slugSet = new Set(d.capabilities as string[]);
+        const matchedIds = new Set<string>();
+        allCapabilities.forEach(c => {
+          if (slugSet.has(c.slug)) matchedIds.add(c.id);
+        });
+        if (matchedIds.size > 0) setSelectedCapIds(matchedIds);
+      }
+      setDiscovered(true);
+      toast({ title: 'Discovered!', description: `Pre-filled from ${d.source}. Review and submit.` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Discovery failed', description: err.message });
+    } finally { setDiscovering(false); }
+  }, [discoverUrl, discoverPath, apiPost, toast, assetTypes, allCapabilities]);
 
   useEffect(() => {
     (async () => {
@@ -180,6 +231,64 @@ export default function SubmitAssetView() {
           Starts at maturity <Badge variant="outline" className="text-xs">{maturity}</Badge> — can be promoted through governance reviews.
         </p>
       </div>
+
+      {/* ═══ Auto-Discover Panel ═══ */}
+      <Card className="border-dashed border-primary/30 bg-primary/[0.02]">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wand2 className="h-4 w-4 text-primary" />
+            Quick Import
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Paste a GitHub repo URL or workspace path — we'll auto-fill name, description, type, and capabilities.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs flex items-center gap-1.5">
+                <GitBranch className="h-3 w-3" /> GitHub Repo URL
+              </Label>
+              <Input
+                placeholder="https://github.com/org/repo"
+                value={discoverUrl}
+                onChange={(e) => { setDiscoverUrl(e.target.value); setDiscoverPath(''); }}
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs flex items-center gap-1.5">
+                <FolderOpen className="h-3 w-3" /> Workspace Path
+              </Label>
+              <Input
+                placeholder="/Workspace/Users/.../my-project"
+                value={discoverPath}
+                onChange={(e) => { setDiscoverPath(e.target.value); setDiscoverUrl(''); }}
+                className="text-sm"
+              />
+            </div>
+          </div>
+          <Button
+            onClick={handleDiscover}
+            disabled={discovering || (!discoverUrl.trim() && !discoverPath.trim())}
+            size="sm"
+            className="w-full"
+          >
+            {discovering ? (
+              <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Discovering...</>
+            ) : discovered ? (
+              <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Re-discover</>
+            ) : (
+              <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> Discover & Auto-Fill</>
+            )}
+          </Button>
+          {discovered && (
+            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Form pre-filled — review below and submit.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ═══ Section 1: Identity ═══ */}
       <Card>

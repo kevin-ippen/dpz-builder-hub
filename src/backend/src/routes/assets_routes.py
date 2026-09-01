@@ -2411,6 +2411,285 @@ def get_marketplace_stats_v2(db: DBSessionDep):
     }
 
 
+# ─── Auto-Discover from Repo / Workspace ────────────────────────────────
+
+@dpz_router.post("/discover")
+def discover_asset(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Auto-discover asset metadata from a GitHub repo URL or workspace path.
+
+    Returns pre-filled form data: name, description, type suggestion,
+    auto-tagged capabilities, README excerpt, and detected properties.
+    """
+    import sqlalchemy as sa
+    import re as _re
+    import requests as _req
+
+    repo_url = body.get("repo_url", "").strip()
+    workspace_path = body.get("workspace_path", "").strip()
+    result: dict = {
+        "name": "", "description": "", "type_suggestion": "",
+        "capabilities": [], "readme_excerpt": "",
+        "repo_url": repo_url, "workspace_path": workspace_path,
+        "properties": {}, "source": "unknown",
+    }
+
+    if repo_url:
+        # ── GitHub discovery ──
+        match = _re.match(r'https?://github\.com/([^/]+)/([^/]+)', repo_url)
+        if not match:
+            return {"error": "Not a recognized GitHub URL", **result}
+
+        owner, repo = match.group(1), match.group(2).rstrip('.git')
+        result["source"] = "github"
+        result["properties"]["repo_url"] = repo_url
+
+        # Fetch repo metadata via GitHub API (unauthenticated, 60 req/hr)
+        try:
+            api_resp = _req.get(
+                f"https://api.github.com/repos/{owner}/{repo}",
+                headers={"Accept": "application/vnd.github.v3+json"},
+                timeout=10,
+            )
+            if api_resp.status_code == 200:
+                repo_data = api_resp.json()
+                result["name"] = repo_data.get("name", repo).replace("-", " ").replace("_", " ").title()
+                result["description"] = repo_data.get("description") or ""
+                result["properties"]["language"] = repo_data.get("language")
+                result["properties"]["stars"] = repo_data.get("stargazers_count", 0)
+                result["properties"]["topics"] = repo_data.get("topics", [])
+                result["properties"]["default_branch"] = repo_data.get("default_branch", "main")
+                result["properties"]["updated_at"] = repo_data.get("updated_at")
+            else:
+                # Fallback: derive name from URL
+                result["name"] = repo.replace("-", " ").replace("_", " ").title()
+        except Exception:
+            result["name"] = repo.replace("-", " ").replace("_", " ").title()
+
+        # Fetch README for description + capability tagging
+        branch = result["properties"].get("default_branch", "main")
+        readme_text = ""
+        for readme_path in (f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/README.md",
+                            f"https://raw.githubusercontent.com/{owner}/{repo}/master/README.md"):
+            try:
+                r = _req.get(readme_path, timeout=10)
+                if r.status_code == 200:
+                    readme_text = r.text
+                    break
+            except Exception:
+                continue
+
+        if readme_text:
+            # Extract first paragraph as description if API description was empty
+            lines = [l.strip() for l in readme_text.split('\n') if l.strip() and not l.strip().startswith('#') and not l.strip().startswith('!')]
+            if not result["description"] and lines:
+                result["description"] = " ".join(lines[:3])[:500]
+            result["readme_excerpt"] = readme_text[:2000]
+
+        # Type suggestion based on repo signals
+        full_text = f"{result['name']} {result['description']} {readme_text[:1000]}".lower()
+        if any(w in full_text for w in ["app", "streamlit", "gradio", "dash", "flask", "fastapi"]):
+            result["type_suggestion"] = "application"
+        elif any(w in full_text for w in ["pipeline", "etl", "ingest", "medallion", "bronze", "silver", "gold"]):
+            result["type_suggestion"] = "pipeline"
+        elif any(w in full_text for w in ["model", "training", "inference", "agent", "llm"]):
+            result["type_suggestion"] = "model"
+        elif any(w in full_text for w in ["dashboard", "report", "analytics", "bi"]):
+            result["type_suggestion"] = "dashboard"
+        elif any(w in full_text for w in ["notebook", "analysis", "exploration"]):
+            result["type_suggestion"] = "notebook"
+        else:
+            result["type_suggestion"] = "accelerator"
+
+        # Auto-tag capabilities
+        result["capabilities"] = _auto_tag_capabilities(result["name"], f"{result['description']} {readme_text[:2000]}")
+
+    elif workspace_path:
+        # ── Workspace path discovery ──
+        result["source"] = "workspace"
+        try:
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            obj = w.workspace.get_status(workspace_path)
+            raw_name = (obj.path or workspace_path).split('/')[-1]
+            # Strip extensions
+            for ext in ('.py', '.sql', '.ipynb', '.scala', '.r'):
+                if raw_name.lower().endswith(ext):
+                    raw_name = raw_name[:-len(ext)]
+            result["name"] = raw_name.replace("-", " ").replace("_", " ").title()
+            result["properties"]["workspace_path"] = workspace_path
+            result["properties"]["object_type"] = str(obj.object_type) if obj.object_type else None
+            result["properties"]["language"] = str(obj.language) if obj.language else None
+
+            # Type suggestion from object type
+            otype = str(obj.object_type).lower() if obj.object_type else ""
+            if "notebook" in otype:
+                result["type_suggestion"] = "notebook"
+            elif "file" in otype:
+                result["type_suggestion"] = "accelerator"
+            elif "directory" in otype:
+                result["type_suggestion"] = "accelerator"
+            else:
+                result["type_suggestion"] = "accelerator"
+
+            # Try to read first cell/lines for description
+            try:
+                content = w.workspace.export(workspace_path).content
+                if content:
+                    import base64
+                    decoded = base64.b64decode(content).decode('utf-8', errors='ignore')[:2000]
+                    # Extract comments or markdown as description
+                    desc_lines = []
+                    for line in decoded.split('\n'):
+                        stripped = line.strip()
+                        if stripped.startswith('#') and not stripped.startswith('#!'):
+                            desc_lines.append(stripped.lstrip('#').strip())
+                        elif stripped.startswith('"""') or stripped.startswith("'''"):
+                            desc_lines.append(stripped.strip("\"'").strip())
+                        if len(desc_lines) >= 3:
+                            break
+                    if desc_lines:
+                        result["description"] = " ".join(desc_lines)[:500]
+                    result["readme_excerpt"] = decoded[:1000]
+                    result["capabilities"] = _auto_tag_capabilities(result["name"], decoded[:2000])
+            except Exception:
+                pass
+        except Exception as e:
+            result["description"] = f"Could not inspect path: {str(e)[:200]}"
+    else:
+        return {"error": "Provide repo_url or workspace_path", **result}
+
+    return result
+
+
+# ─── Feeds Gold → Platform Pulse Sync ────────────────────────────────
+
+@dpz_router.post("/learn/sync-feeds")
+def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Sync Databricks content from feeds_gold.content_search_source into
+    the Learn platform channel.
+
+    Body: { max_age_days?: int (default 90), limit?: int (default 200) }
+
+    Reads real enriched content from the feeds pipeline (Databricks blog,
+    release notes, YouTube, training, GitHub) and inserts into learn_content
+    with channel='platform'. Deduplicates on title.
+    """
+    import sqlalchemy as sa
+    from databricks.sdk import WorkspaceClient
+
+    max_age_days = body.get("max_age_days", 90)
+    limit = min(body.get("limit", 200), 500)
+
+    # Query feeds gold via SQL warehouse
+    w = WorkspaceClient()
+    warehouse_id = None
+    for r in (getattr(w.config, '_resources', None) or []):
+        if hasattr(r, 'sql_warehouse'):
+            warehouse_id = r.sql_warehouse.id
+            break
+    if not warehouse_id:
+        import os
+        warehouse_id = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4047b28d66a51bdc")
+
+    query = f"""
+    SELECT
+        item_id, title, COALESCE(enriched_summary, summary) AS summary,
+        url, published_at, source_name, content_type,
+        product_area, impact_level, topics,
+        image_url, action_summary
+    FROM serverless_stable_h7wanf_catalog.feeds_gold.content_search_source
+    WHERE published_at >= current_date() - INTERVAL {max_age_days} DAYS
+      AND title IS NOT NULL AND title != ''
+    ORDER BY published_at DESC
+    LIMIT {limit}
+    """
+
+    try:
+        from databricks.sdk.service.sql import StatementState
+        stmt = w.statement_execution.execute_statement(
+            warehouse_id=warehouse_id,
+            statement=query,
+            wait_timeout="50s",
+        )
+        if stmt.status.state != StatementState.SUCCEEDED:
+            return {"error": f"Query failed: {stmt.status.error}", "synced": 0}
+
+        columns = [c.name for c in stmt.manifest.schema.columns]
+        rows = []
+        if stmt.result and stmt.result.data_array:
+            rows = stmt.result.data_array
+    except Exception as e:
+        return {"error": f"Feeds query failed: {str(e)[:300]}", "synced": 0}
+
+    # Get existing titles to deduplicate
+    existing = set()
+    for r in db.execute(sa.text("SELECT title FROM learn_content WHERE channel = 'platform'")):
+        existing.add(r[0].lower().strip() if r[0] else "")
+
+    # Map content_type to our source taxonomy
+    source_map = {
+        "release_notes": "release", "announcement": "release",
+        "blog": "blog", "customer_story": "blog", "case_study": "blog",
+        "reference_architecture": "blog",
+        "tutorial": "howto", "training": "howto",
+        "repository": "repo",
+    }
+
+    inserted = 0
+    skipped = 0
+    for row in rows:
+        rec = dict(zip(columns, row))
+        title = (rec.get("title") or "").strip()
+        if not title or title.lower() in existing:
+            skipped += 1
+            continue
+
+        desc = (rec.get("summary") or rec.get("action_summary") or "")[:500]
+        content_type = rec.get("content_type") or ""
+        source = source_map.get(content_type, "blog")
+        caps = _auto_tag_capabilities(title, desc)
+
+        # Build tags from topics
+        topics = rec.get("topics")
+        tags = []
+        if isinstance(topics, str):
+            try:
+                tags = json.loads(topics)
+            except Exception:
+                tags = [t.strip() for t in topics.split(",") if t.strip()]
+        elif isinstance(topics, list):
+            tags = topics
+        tags = [str(t) for t in (tags or [])][:5]
+        if rec.get("product_area"):
+            tags.append(rec["product_area"])
+
+        cid = str(_uuid.uuid4())
+        try:
+            db.execute(sa.text("""
+                INSERT INTO learn_content
+                  (id, title, description, source, url, tags, author, published_at,
+                   channel, relevance_capabilities)
+                VALUES (:id, :title, :desc, :source, :url, :tags::jsonb, :author,
+                        COALESCE(:pub::timestamptz, now()), 'platform', :caps::jsonb)
+            """), {
+                "id": cid, "title": title, "desc": desc,
+                "source": source,
+                "url": rec.get("url") or "#",
+                "tags": json.dumps(tags[:6]),
+                "author": rec.get("source_name"),
+                "pub": rec.get("published_at"),
+                "caps": json.dumps(caps),
+            })
+            existing.add(title.lower())
+            inserted += 1
+        except Exception:
+            skipped += 1
+            continue
+
+    db.commit()
+    return {"synced": inserted, "skipped": skipped, "total_feed_rows": len(rows)}
+
+
 def register_routes(app):
     app.include_router(asset_types_router)
     app.include_router(assets_router)

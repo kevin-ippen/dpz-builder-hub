@@ -7,6 +7,7 @@ import {
     Settings,
     Target,
     GraduationCap,
+    Upload,
     type LucideIcon,
   } from 'lucide-react';
   
@@ -108,16 +109,16 @@ import {
       showInLanding: false,
     },
 
-    // ─── Hidden routes (accessible but not in sidebar) ───
     {
       id: 'data-products',
       name: 'Submit',
       path: '/submit',
-      description: 'Register an idea, POC, or production asset.',
-      icon: Lightbulb,
-      group: 'Discover',
+      description: 'Register a new asset — paste a repo URL or workspace path to auto-fill.',
+      icon: Upload,
+      group: 'Create',
       maturity: 'ga',
-      showInLanding: false,  // hidden from nav — accessed via Lab
+      showInLanding: true,
+      permissionId: 'data-products',  // reuses data-products permission
     },
   ];
   
