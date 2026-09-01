@@ -94,6 +94,7 @@ export default function AssetExplorerView() {
   const [capMap, setCapMap] = useState<Record<string, { slug: string; name: string; category: string }[]>>({});
   const [allCaps, setAllCaps] = useState<{ slug: string; name: string; category: string }[]>([]);
   const [capFilter, setCapFilter] = useState<string | null>(null);
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -586,6 +587,69 @@ export default function AssetExplorerView() {
                 onClick={() => setCapFilter(capFilter === c.slug ? null : c.slug)}
               >{c.name}</button>
             ))}
+            <div className="w-px h-4 bg-border mx-1" />
+            <button
+              className={cn(
+                'px-2.5 py-0.5 rounded-full text-[10px] font-mono transition-colors border flex items-center gap-1',
+                showHeatmap ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted text-muted-foreground border-transparent'
+              )}
+              onClick={() => setShowHeatmap(!showHeatmap)}
+            >
+              <LayoutGrid className="h-2.5 w-2.5" /> Heatmap
+            </button>
+          </div>
+        )}
+
+        {/* Capability Coverage Heatmap */}
+        {showHeatmap && allCaps.length > 0 && (
+          <div className="rounded-xl border bg-card/50 p-4 mt-3">
+            <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">Capability × Maturity Coverage</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr>
+                    <th className="text-left font-mono text-muted-foreground py-1 pr-3 min-w-[100px]">Capability</th>
+                    {MATURITY_ORDER.filter(m => m !== 'production_candidate').map(m => (
+                      <th key={m} className="text-center font-mono text-muted-foreground py-1 px-2 min-w-[60px]">
+                        {MATURITY_CONFIG[m]?.label || m}
+                      </th>
+                    ))}
+                    <th className="text-center font-mono text-muted-foreground py-1 px-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allCaps.map(cap => {
+                    const assetsWithCap = assets.filter(a =>
+                      capMap[(a as any).id]?.some((c: any) => c.slug === cap.slug)
+                    );
+                    const total = assetsWithCap.length;
+                    return (
+                      <tr key={cap.slug} className="border-t border-border/30 hover:bg-muted/30">
+                        <td className="py-1.5 pr-3 font-medium">{cap.name}</td>
+                        {MATURITY_ORDER.filter(m => m !== 'production_candidate').map(m => {
+                          const count = assetsWithCap.filter(a => (a as any).maturity === m).length;
+                          return (
+                            <td key={m} className="text-center py-1.5 px-2">
+                              {count > 0 ? (
+                                <span className={cn(
+                                  'inline-block w-6 h-6 leading-6 rounded text-[10px] font-bold',
+                                  count >= 3 ? 'bg-green-500/20 text-green-700 dark:text-green-300' :
+                                  count >= 1 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' :
+                                  'bg-muted text-muted-foreground'
+                                )}>{count}</span>
+                              ) : (
+                                <span className="text-muted-foreground/30">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="text-center py-1.5 px-2 font-bold">{total}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

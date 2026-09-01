@@ -39,39 +39,7 @@ const FILTER_TABS = [
   { id: 'howto', label: 'How-Tos' },
 ];
 
-// ─── Static seed content (will be replaced by API) ──────────────────
-const SEED_CONTENT: LearnItem[] = [
-  {
-    id: '1', title: 'Building AI Agents on Databricks',
-    description: 'End-to-end guide for building, evaluating, and deploying AI agents using MLflow, Unity Catalog, and Model Serving.',
-    source: 'howto', url: '#', tags: ['agents', 'mlflow', 'serving'], date: '2026-08-15', author: 'Platform Team',
-  },
-  {
-    id: '2', title: 'Lakebase Autoscale: Zero-to-Production',
-    description: 'How to set up Lakebase Autoscale with scale-to-zero, branching, and reverse ETL for your Databricks Apps.',
-    source: 'blog', url: '#', tags: ['lakebase', 'apps', 'postgres'], date: '2026-08-20', author: 'Data Engineering',
-  },
-  {
-    id: '3', title: 'dpz-builder-hub',
-    description: 'Source repository for the DPZ Builder Hub — internal enablement and asset management platform.',
-    source: 'repo', url: 'https://github.com/kevin-ippen/dpz-builder-hub', tags: ['hub', 'react', 'fastapi'], date: '2026-08-31',
-  },
-  {
-    id: '4', title: 'SOA Marketing Agent v16 Released',
-    description: 'Deploy gate passed — all 3 deterministic scorers at 1.000, 35/35 stress battery, 25% faster latency.',
-    source: 'release', url: '#', tags: ['soa', 'agents', 'eval'], date: '2026-05-30',
-  },
-  {
-    id: '5', title: 'Metric Views: Semantic Layer for Everything',
-    description: 'How to define governed business metrics in YAML and reuse them across dashboards, notebooks, SQL, and AI tools.',
-    source: 'howto', url: '#', tags: ['metrics', 'governance', 'sql'], date: '2026-07-10', author: 'Analytics Team',
-  },
-  {
-    id: '6', title: 'Crystal Ball Forecast: Governed Canary Rollout',
-    description: 'Production governance pattern — canary rollout with WMAPE-based automatic rollback and cost guardrails.',
-    source: 'blog', url: '#', tags: ['mlops', 'governance', 'forecasting'], date: '2026-07-22', author: 'ML Platform',
-  },
-];
+
 
 // ─── Learn Card ─────────────────────────────────────────────────────
 function LearnCard({ item }: { item: LearnItem }) {
@@ -132,7 +100,9 @@ export default function LearnView() {
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
-  const [items] = useState<LearnItem[]>(SEED_CONTENT);
+  const { get: apiGet } = useApi();
+  const [items, setItems] = useState<LearnItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
 
@@ -141,6 +111,16 @@ export default function LearnView() {
     setDynamicTitle('Learn');
     return () => { setStaticSegments([]); setDynamicTitle(null); };
   }, [setStaticSegments, setDynamicTitle]);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const resp = await apiGet<any>('/api/dpz/learn');
+        if (!resp.error && resp.data?.items) setItems(resp.data.items);
+      } catch {} finally { setLoading(false); }
+    })();
+  }, [apiGet]);
 
   const filtered = items.filter(item => {
     if (sourceFilter && item.source !== sourceFilter) return false;

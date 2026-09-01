@@ -760,7 +760,7 @@ def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
     result = db.execute(sa.text(
         "SELECT id, title, description, created_by, status, priority, category, "
         "upvotes, signals_count, domain, linked_asset_id, created_at, "
-        "business_justification, target_date, estimated_effort, requested_by_team, budget_impact "
+        "business_justification, target_date, estimated_effort, requested_by_team, budget_impact, source "
         "FROM demands ORDER BY upvotes DESC, created_at DESC"
     ))
     items = []
@@ -777,6 +777,7 @@ def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
             "estimated_effort": row[14],
             "requested_by_team": row[15],
             "budget_impact": row[16],
+            "source": row[17] or "organic",
         })
     # Attach capability names to each item
     if items:
@@ -847,6 +848,116 @@ def create_wishlist_item(demand_in: dict, db: DBSessionDep, current_user: Curren
     })
     db.commit()
     return {"id": demand_id, "status": "created"}
+
+
+@dpz_router.post("/wishlist/seed")
+def seed_wishlist_from_leadership(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Bulk-seed wishlist items from leadership priorities.
+
+    Body: { items: [{ title, description, priority, category, capability_slugs?, business_justification? }] }
+    Sets source='leadership' to distinguish from organic submissions.
+    """
+    import sqlalchemy as sa
+    import json as _json
+    user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'system')
+    items = body.get("items", [])
+    created = []
+    for item in items:
+        demand_id = str(_uuid.uuid4())
+        db.execute(sa.text(
+            "INSERT INTO demands (id, title, description, created_by, status, priority, category, domain, "
+            "source, business_justification) "
+            "VALUES (:id, :title, :desc, :by, 'open', :pri, :cat, :cat, 'leadership', :biz_just)"
+        ), {
+            "id": demand_id,
+            "title": item.get("title", "Untitled"),
+            "desc": item.get("description"),
+            "by": user_email,
+            "pri": item.get("priority", "high"),
+            "cat": item.get("category"),
+            "biz_just": item.get("business_justification"),
+        })
+        # Link capabilities by slug
+        for slug in item.get("capability_slugs", []):
+            db.execute(sa.text(
+                "INSERT INTO demand_capabilities (demand_id, capability_id) "
+                "SELECT :did, id FROM capabilities WHERE slug = :slug "
+                "ON CONFLICT DO NOTHING"
+            ), {"did": demand_id, "slug": slug})
+        created.append({"id": demand_id, "title": item.get("title")})
+    db.commit()
+    return {"seeded": len(created), "items": created}
+
+
+@dpz_router.get("/wishlist/gap-analysis")
+def wishlist_gap_analysis(db: DBSessionDep):
+    """Capability gap analysis: which capabilities are most requested but least covered?
+
+    Returns each capability with demand_count (wishes needing it) and asset_count
+    (existing assets providing it), plus a gap_score = demand_count / max(asset_count, 1).
+    """
+    import sqlalchemy as sa
+    rows = db.execute(sa.text("""
+        SELECT
+            c.id, c.name, c.slug, c.category,
+            COUNT(DISTINCT dc.demand_id) AS demand_count,
+            COUNT(DISTINCT ac.asset_id) AS asset_count
+        FROM capabilities c
+        LEFT JOIN demand_capabilities dc ON dc.capability_id = c.id
+        LEFT JOIN asset_capabilities ac ON ac.capability_id = c.id
+        GROUP BY c.id, c.name, c.slug, c.category
+        ORDER BY COUNT(DISTINCT dc.demand_id) DESC, COUNT(DISTINCT ac.asset_id) ASC
+    """))
+    items = []
+    for r in rows:
+        demand = r[4] or 0
+        supply = r[5] or 0
+        gap = round(demand / max(supply, 1), 2)
+        items.append({
+            "id": str(r[0]), "name": r[1], "slug": r[2], "category": r[3],
+            "demand_count": demand, "asset_count": supply, "gap_score": gap,
+        })
+    return {"items": items}
+
+
+@dpz_router.get("/wishlist/{item_id}/match-score")
+def get_wish_match_score(item_id: str, db: DBSessionDep):
+    """How well do existing assets cover this wish's required capabilities?
+
+    Returns a match_score (0-100) plus per-capability coverage.
+    """
+    import sqlalchemy as sa
+    # Get wish's capabilities
+    wish_caps = db.execute(sa.text(
+        "SELECT c.id, c.name, c.slug FROM demand_capabilities dc "
+        "JOIN capabilities c ON dc.capability_id = c.id WHERE dc.demand_id = :wid"
+    ), {"wid": item_id}).fetchall()
+    if not wish_caps:
+        return {"match_score": 0, "capabilities": [], "best_matches": []}
+    # For each capability, find assets providing it
+    cap_results = []
+    asset_scores: dict = {}  # asset_id -> count of matching caps
+    for cap in wish_caps:
+        assets = db.execute(sa.text(
+            "SELECT a.id, a.name, a.maturity FROM asset_capabilities ac "
+            "JOIN assets a ON ac.asset_id = a.id WHERE ac.capability_id = :cid"
+        ), {"cid": str(cap[0])}).fetchall()
+        cap_results.append({
+            "slug": cap[2], "name": cap[1],
+            "covered": len(assets) > 0,
+            "asset_count": len(assets),
+        })
+        for a in assets:
+            aid = str(a[0])
+            if aid not in asset_scores:
+                asset_scores[aid] = {"id": aid, "name": a[1], "maturity": a[2], "matched_caps": 0}
+            asset_scores[aid]["matched_caps"] += 1
+    covered = sum(1 for c in cap_results if c["covered"])
+    score = round((covered / len(cap_results)) * 100) if cap_results else 0
+    best = sorted(asset_scores.values(), key=lambda x: -x["matched_caps"])[:5]
+    for b in best:
+        b["coverage_pct"] = round((b["matched_caps"] / len(cap_results)) * 100)
+    return {"match_score": score, "capabilities": cap_results, "best_matches": best}
 
 
 @dpz_router.post("/wishlist/{item_id}/upvote")
@@ -1989,6 +2100,81 @@ def add_asset_image(asset_id: str, body: dict, db: DBSessionDep):
     })
     db.commit()
     return {"id": img_id}
+
+
+# ─── Learn / Content Hub ────────────────────────────────────────
+
+@dpz_router.get("/learn")
+def list_learn_content(db: DBSessionDep, source: Optional[str] = Query(None)):
+    """List content for the Learn hub, optionally filtered by source type.
+
+    Combines curated learn_content table with auto-generated entries from
+    recent asset_versions (release notes).
+    """
+    import sqlalchemy as sa
+    where = "WHERE source = :src" if source else ""
+    params = {"src": source} if source else {}
+    rows = db.execute(sa.text(f"""
+        SELECT id, title, description, source, url, tags, author, published_at
+        FROM learn_content {where}
+        ORDER BY published_at DESC
+    """), params)
+    items = []
+    for r in rows:
+        tags_val = r[5]
+        if isinstance(tags_val, str):
+            try:
+                tags_val = json.loads(tags_val)
+            except Exception:
+                tags_val = []
+        items.append({
+            "id": str(r[0]), "title": r[1], "description": r[2],
+            "source": r[3], "url": r[4],
+            "tags": tags_val or [],
+            "author": r[6],
+            "date": r[7].isoformat() if r[7] else None,
+        })
+    # Auto-generate release entries from recent versions
+    versions = db.execute(sa.text("""
+        SELECT av.id, a.name, av.version, av.release_notes, av.released_by, av.created_at
+        FROM asset_versions av JOIN assets a ON av.asset_id = a.id
+        WHERE av.release_notes IS NOT NULL AND av.release_notes != ''
+        ORDER BY av.created_at DESC LIMIT 5
+    """))
+    for v in versions:
+        items.append({
+            "id": str(v[0]), "title": f"{v[1]} {v[2]} Released",
+            "description": v[3][:200] if v[3] else '',
+            "source": "release", "url": "#",
+            "tags": ["release"],
+            "author": v[4],
+            "date": v[5].isoformat() if v[5] else None,
+        })
+    # Sort combined by date
+    items.sort(key=lambda x: x.get("date") or '', reverse=True)
+    return {"items": items}
+
+
+@dpz_router.post("/learn")
+def create_learn_content(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Add a new content item to the Learn hub."""
+    import sqlalchemy as sa
+    cid = str(_uuid.uuid4())
+    db.execute(sa.text("""
+        INSERT INTO learn_content (id, title, description, source, url, tags, author, published_at)
+        VALUES (:id, :title, :desc, :source, :url, :tags::jsonb, :author, COALESCE(:pub::timestamptz, now()))
+    """), {
+        "id": cid,
+        "title": body.get("title", "Untitled"),
+        "desc": body.get("description"),
+        "source": body.get("source", "blog"),
+        "url": body.get("url", "#"),
+        "tags": json.dumps(body.get("tags", [])),
+        "author": body.get("author"),
+        "pub": body.get("published_at"),
+    })
+    db.commit()
+    return {"id": cid, "status": "created"}
 
 
 # ─── Staleness / Freshness scoring ────────────────────────────────────

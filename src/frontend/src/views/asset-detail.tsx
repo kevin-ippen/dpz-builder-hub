@@ -5,6 +5,7 @@ import {
   MapPin, Globe, Calendar, User, Tag, FileJson,
   Blocks, Building2, Database, ExternalLink, Shield,
   TrendingUp, CheckCircle2, X, Clock, Link2,
+  AlertTriangle, Activity, ThumbsUp, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -112,6 +113,7 @@ export default function AssetDetailView() {
   const [governance, setGovernance] = useState<any>({});
   const [promoHistory, setPromoHistory] = useState<any[]>([]);
   const [linkedWishes, setLinkedWishes] = useState<any[]>([]);
+  const [staleness, setStaleness] = useState<{ score: number; label: string } | null>(null);
   const [promoDialogOpen, setPromoDialogOpen] = useState(false);
   const [promoNotes, setPromoNotes] = useState('');
 
@@ -149,6 +151,11 @@ export default function AssetDetailView() {
       if (!govRes.error && govRes.data) setGovernance(govRes.data);
       if (!promoRes.error && promoRes.data?.items) setPromoHistory(promoRes.data.items);
       if (!wishRes.error && wishRes.data?.items) setLinkedWishes(wishRes.data.items);
+      // Fetch staleness for this asset
+      const staleRes = await apiGet<any>('/api/dpz/staleness');
+      if (!staleRes.error && staleRes.data?.by_asset && assetId) {
+        setStaleness(staleRes.data.by_asset[assetId] || null);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load asset');
     } finally {
@@ -252,6 +259,15 @@ export default function AssetDetailView() {
             {(asset as any).delivery_status && (asset as any).delivery_status !== 'unfunded' && (
               <Badge variant="outline" className="text-xs">
                 {(asset as any).delivery_status}
+              </Badge>
+            )}
+            {staleness && staleness.label !== 'active' && (
+              <Badge
+                variant="outline"
+                className={`text-xs gap-1 ${staleness.label === 'stale' ? 'border-red-300 text-red-600 dark:border-red-700 dark:text-red-400' : 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400'}`}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                {staleness.label} ({Math.round(staleness.score * 100)}%)
               </Badge>
             )}
           </div>
@@ -501,6 +517,48 @@ export default function AssetDetailView() {
 
       {/* Right rail — sticky */}
       <aside className="space-y-4 lg:sticky lg:top-6">
+        {/* Operational Status card */}
+        <div className="rounded-xl border p-4 space-y-3">
+          <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Activity className="h-3 w-3" /> Status
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="text-center rounded-lg bg-muted/50 p-2">
+              <div className="text-lg font-bold">{(asset as any).install_count ?? 0}</div>
+              <div className="text-[9px] font-mono text-muted-foreground uppercase">Adopters</div>
+            </div>
+            <div className="text-center rounded-lg bg-muted/50 p-2">
+              <div className="text-lg font-bold">{evidenceSummary?.evidence_score ?? 0}%</div>
+              <div className="text-[9px] font-mono text-muted-foreground uppercase">Evidence</div>
+            </div>
+            <div className="text-center rounded-lg bg-muted/50 p-2">
+              <div className="text-lg font-bold">{evidenceSummary?.total_signals ?? 0}</div>
+              <div className="text-[9px] font-mono text-muted-foreground uppercase">Signals</div>
+            </div>
+            <div className="text-center rounded-lg bg-muted/50 p-2">
+              {staleness ? (
+                <>
+                  <div className={`text-lg font-bold ${staleness.label === 'stale' ? 'text-red-500' : staleness.label === 'cooling' ? 'text-amber-500' : 'text-green-500'}`}>
+                    {staleness.label === 'active' ? '●' : staleness.label === 'cooling' ? '◐' : '○'}
+                  </div>
+                  <div className="text-[9px] font-mono text-muted-foreground uppercase">{staleness.label}</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg font-bold text-green-500">●</div>
+                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Active</div>
+                </>
+              )}
+            </div>
+          </div>
+          {(asset as any).latest_version && (
+            <div className="flex items-center justify-between text-xs border-t pt-2">
+              <span className="text-muted-foreground">Latest version</span>
+              <Badge variant="outline" className="text-[9px] font-mono">{(asset as any).latest_version}</Badge>
+            </div>
+          )}
+        </div>
+
         {/* Image carousel */}
         <ImageCarousel assetId={asset.id} />
 
@@ -631,14 +689,7 @@ export default function AssetDetailView() {
         {/* Version timeline */}
         <VersionTimeline assetId={asset.id} />
 
-        {/* Signals summary (compact) */}
-        {(evidenceSummary?.total_signals ?? 0) > 0 && (
-          <div className="rounded-xl border p-4">
-            <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Evidence</h3>
-            <div className="text-lg font-bold">{evidenceSummary?.evidence_score ?? 0}%</div>
-            <p className="text-[10px] text-muted-foreground">{evidenceSummary?.total_signals} signals</p>
-          </div>
-        )}
+
 
 
         {/* Similar assets */}
