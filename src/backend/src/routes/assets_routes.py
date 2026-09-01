@@ -2102,57 +2102,153 @@ def add_asset_image(asset_id: str, body: dict, db: DBSessionDep):
     return {"id": img_id}
 
 
-# ─── Learn / Content Hub ────────────────────────────────────────
+# ─── Learn / Content Hub (Three-Channel) ────────────────────────────────────
+
+# Capability keyword map for auto-tagging platform content
+_CAPABILITY_KEYWORDS = {
+    "agent-framework":    ["agent", "agents", "agentic", "tool calling", "function calling", "mcp", "openai agents"],
+    "batch-inference":    ["batch inference", "batch scoring", "batch prediction"],
+    "llm-orchestration":  ["llm", "foundation model", "prompt", "chat completion", "rag", "retrieval augmented", "ai gateway"],
+    "model-training":     ["training", "fine-tuning", "finetuning", "hyperparameter", "automl"],
+    "realtime-inference": ["real-time inference", "realtime", "model serving", "serving endpoint", "online inference"],
+    "batch-etl":          ["etl", "batch processing", "medallion", "bronze", "silver", "gold", "declarative pipeline", "dlt"],
+    "feature-store":      ["feature store", "feature engineering", "feature table"],
+    "data-warehouse":     ["warehouse", "sql warehouse", "dbsql", "lakehouse", "delta lake"],
+    "streaming-ingest":   ["streaming", "structured streaming", "kafka", "kinesis", "auto loader", "cloudfiles"],
+    "vector-store":       ["vector search", "vector index", "embedding", "semantic search", "similarity"],
+    "geospatial":         ["geospatial", "h3", "st_", "spatial", "geo"],
+    "governed-catalog":   ["unity catalog", "governance", "lineage", "access control", "data governance", "tagging"],
+    "interactive-app":    ["app", "apps", "streamlit", "dash", "gradio", "databricks app", "lakebase"],
+    "nlq":                ["genie", "natural language", "text-to-sql", "ai/bi"],
+    "observability":      ["mlflow", "tracing", "evaluation", "monitoring", "scorer", "observability"],
+    "operational-db":     ["lakebase", "postgres", "operational database", "oltp"],
+    "semantic-layer":     ["metric view", "semantic layer", "metric", "kpi", "measure"],
+    "workflow-orchestration": ["job", "workflow", "orchestration", "schedule", "task"],
+}
+
+
+def _auto_tag_capabilities(title: str, description: str) -> list:
+    """Match content text against capability keywords. Returns list of matching slugs."""
+    text = f"{title} {description}".lower()
+    matched = []
+    for slug, keywords in _CAPABILITY_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            matched.append(slug)
+    return matched
+
+
+def _parse_learn_row(r, col_offset=0):
+    """Parse a learn_content row into a dict. Handles JSONB tags."""
+    tags_val = r[5 + col_offset]
+    if isinstance(tags_val, str):
+        try:
+            tags_val = json.loads(tags_val)
+        except Exception:
+            tags_val = []
+    rel_caps = r[9 + col_offset] if len(r) > (9 + col_offset) else []
+    if isinstance(rel_caps, str):
+        try:
+            rel_caps = json.loads(rel_caps)
+        except Exception:
+            rel_caps = []
+    return {
+        "id": str(r[0 + col_offset]), "title": r[1 + col_offset], "description": r[2 + col_offset],
+        "source": r[3 + col_offset], "url": r[4 + col_offset],
+        "tags": tags_val or [],
+        "author": r[6 + col_offset],
+        "date": r[7 + col_offset].isoformat() if r[7 + col_offset] else None,
+        "channel": r[8 + col_offset] if len(r) > (8 + col_offset) else "team",
+        "relevance_capabilities": rel_caps or [],
+        "track_slug": r[10 + col_offset] if len(r) > (10 + col_offset) else None,
+        "track_order": r[11 + col_offset] if len(r) > (11 + col_offset) else None,
+    }
+
 
 @dpz_router.get("/learn")
-def list_learn_content(db: DBSessionDep, source: Optional[str] = Query(None)):
-    """List content for the Learn hub, optionally filtered by source type.
+def list_learn_content(
+    db: DBSessionDep,
+    source: Optional[str] = Query(None),
+    channel: Optional[str] = Query(None),
+):
+    """List content for the Learn hub.
 
-    Combines curated learn_content table with auto-generated entries from
-    recent asset_versions (release notes).
+    - ?channel=team (default if omitted) — team-authored content + auto-generated release entries
+    - ?channel=platform — Databricks platform updates
+    - ?channel=track — all track items (use /learn/tracks for grouped view)
+    - ?source=blog|howto|... — further filter by source type
     """
     import sqlalchemy as sa
-    where = "WHERE source = :src" if source else ""
-    params = {"src": source} if source else {}
+    clauses = []
+    params: dict = {}
+    if channel:
+        clauses.append("channel = :ch")
+        params["ch"] = channel
+    if source:
+        clauses.append("source = :src")
+        params["src"] = source
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     rows = db.execute(sa.text(f"""
-        SELECT id, title, description, source, url, tags, author, published_at
+        SELECT id, title, description, source, url, tags, author, published_at,
+               channel, relevance_capabilities, track_slug, track_order
         FROM learn_content {where}
-        ORDER BY published_at DESC
+        ORDER BY COALESCE(track_order, 999), published_at DESC
     """), params)
-    items = []
-    for r in rows:
-        tags_val = r[5]
-        if isinstance(tags_val, str):
-            try:
-                tags_val = json.loads(tags_val)
-            except Exception:
-                tags_val = []
-        items.append({
-            "id": str(r[0]), "title": r[1], "description": r[2],
-            "source": r[3], "url": r[4],
-            "tags": tags_val or [],
-            "author": r[6],
-            "date": r[7].isoformat() if r[7] else None,
-        })
-    # Auto-generate release entries from recent versions
-    versions = db.execute(sa.text("""
-        SELECT av.id, a.name, av.version, av.release_notes, av.released_by, av.created_at
-        FROM asset_versions av JOIN assets a ON av.asset_id = a.id
-        WHERE av.release_notes IS NOT NULL AND av.release_notes != ''
-        ORDER BY av.created_at DESC LIMIT 5
-    """))
-    for v in versions:
-        items.append({
-            "id": str(v[0]), "title": f"{v[1]} {v[2]} Released",
-            "description": v[3][:200] if v[3] else '',
-            "source": "release", "url": "#",
-            "tags": ["release"],
-            "author": v[4],
-            "date": v[5].isoformat() if v[5] else None,
-        })
-    # Sort combined by date
+    items = [_parse_learn_row(r) for r in rows]
+
+    # For 'team' channel (or unfiltered), also inject auto-generated release entries
+    if not channel or channel == 'team':
+        versions = db.execute(sa.text("""
+            SELECT av.id, a.name, av.version, av.release_notes, av.released_by, av.created_at
+            FROM asset_versions av JOIN assets a ON av.asset_id = a.id
+            WHERE av.release_notes IS NOT NULL AND av.release_notes != ''
+            ORDER BY av.created_at DESC LIMIT 5
+        """))
+        for v in versions:
+            items.append({
+                "id": str(v[0]), "title": f"{v[1]} {v[2]} Released",
+                "description": v[3][:200] if v[3] else '',
+                "source": "release", "url": "#",
+                "tags": ["release"], "author": v[4],
+                "date": v[5].isoformat() if v[5] else None,
+                "channel": "team", "relevance_capabilities": [],
+                "track_slug": None, "track_order": None,
+            })
     items.sort(key=lambda x: x.get("date") or '', reverse=True)
     return {"items": items}
+
+
+@dpz_router.get("/learn/tracks")
+def list_learn_tracks(db: DBSessionDep):
+    """List all skill tracks with their items."""
+    import sqlalchemy as sa
+    tracks = db.execute(sa.text("""
+        SELECT slug, title, description, icon, category FROM learn_tracks ORDER BY title
+    """))
+    result = []
+    for t in tracks:
+        track_items = db.execute(sa.text("""
+            SELECT id, title, description, source, url, tags, author, published_at,
+                   channel, relevance_capabilities, track_slug, track_order
+            FROM learn_content WHERE track_slug = :slug ORDER BY track_order ASC
+        """), {"slug": t[0]})
+        result.append({
+            "slug": t[0], "title": t[1], "description": t[2],
+            "icon": t[3], "category": t[4],
+            "items": [_parse_learn_row(r) for r in track_items],
+        })
+    return {"tracks": result}
+
+
+@dpz_router.get("/learn/stats")
+def learn_stats(db: DBSessionDep):
+    """Counts by channel for the Learn hub header."""
+    import sqlalchemy as sa
+    rows = db.execute(sa.text("""
+        SELECT channel, COUNT(*) FROM learn_content GROUP BY channel
+    """))
+    counts = {r[0]: r[1] for r in rows}
+    return {"team": counts.get("team", 0), "platform": counts.get("platform", 0),
+            "track": counts.get("track", 0), "total": sum(counts.values())}
 
 
 @dpz_router.post("/learn")
@@ -2160,21 +2256,79 @@ def create_learn_content(body: dict, db: DBSessionDep, current_user: CurrentUser
     """Add a new content item to the Learn hub."""
     import sqlalchemy as sa
     cid = str(_uuid.uuid4())
+    tags = body.get("tags", [])
+    title = body.get("title", "Untitled")
+    desc = body.get("description", "")
+    caps = body.get("relevance_capabilities") or _auto_tag_capabilities(title, desc)
     db.execute(sa.text("""
-        INSERT INTO learn_content (id, title, description, source, url, tags, author, published_at)
-        VALUES (:id, :title, :desc, :source, :url, :tags::jsonb, :author, COALESCE(:pub::timestamptz, now()))
+        INSERT INTO learn_content
+          (id, title, description, source, url, tags, author, published_at,
+           channel, relevance_capabilities, track_slug, track_order)
+        VALUES (:id, :title, :desc, :source, :url, :tags::jsonb, :author,
+                COALESCE(:pub::timestamptz, now()),
+                :channel, :caps::jsonb, :track_slug, :track_order)
     """), {
-        "id": cid,
-        "title": body.get("title", "Untitled"),
-        "desc": body.get("description"),
+        "id": cid, "title": title, "desc": desc,
         "source": body.get("source", "blog"),
         "url": body.get("url", "#"),
-        "tags": json.dumps(body.get("tags", [])),
+        "tags": json.dumps(tags),
         "author": body.get("author"),
         "pub": body.get("published_at"),
+        "channel": body.get("channel", "team"),
+        "caps": json.dumps(caps),
+        "track_slug": body.get("track_slug"),
+        "track_order": body.get("track_order"),
     })
     db.commit()
     return {"id": cid, "status": "created"}
+
+
+@dpz_router.post("/learn/ingest-platform")
+def ingest_platform_content(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
+    """Bulk-ingest platform content (Databricks release notes, blog posts, etc.).
+
+    Body: { items: [{ title, description, source, url, published_at?, tags? }] }
+    Each item is auto-tagged with relevant capabilities and a relevance score
+    computed as the count of org-active capabilities it touches.
+    """
+    import sqlalchemy as sa
+    raw_items = body.get("items", [])
+    # Get capabilities currently in use by our assets
+    active_caps = set()
+    rows = db.execute(sa.text("""
+        SELECT DISTINCT c.slug FROM asset_capabilities ac
+        JOIN capabilities c ON ac.capability_id = c.id
+    """))
+    for r in rows:
+        active_caps.add(r[0])
+
+    inserted = 0
+    for item in raw_items:
+        title = item.get("title", "")
+        desc = item.get("description", "")
+        caps = _auto_tag_capabilities(title, desc)
+        # Relevance = how many of our active capabilities this touches
+        relevance = len([c for c in caps if c in active_caps])
+        cid = str(_uuid.uuid4())
+        db.execute(sa.text("""
+            INSERT INTO learn_content
+              (id, title, description, source, url, tags, author, published_at,
+               channel, relevance_capabilities)
+            VALUES (:id, :title, :desc, :source, :url, :tags::jsonb, :author,
+                    COALESCE(:pub::timestamptz, now()), 'platform', :caps::jsonb)
+            ON CONFLICT DO NOTHING
+        """), {
+            "id": cid, "title": title, "desc": desc,
+            "source": item.get("source", "release"),
+            "url": item.get("url", "#"),
+            "tags": json.dumps(item.get("tags", []) + (["relevant"] if relevance > 0 else [])),
+            "author": item.get("author"),
+            "pub": item.get("published_at"),
+            "caps": json.dumps(caps),
+        })
+        inserted += 1
+    db.commit()
+    return {"ingested": inserted, "active_capabilities": list(active_caps)}
 
 
 # ─── Staleness / Freshness scoring ────────────────────────────────────
