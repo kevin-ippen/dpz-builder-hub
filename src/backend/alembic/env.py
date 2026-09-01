@@ -8,7 +8,7 @@ from alembic import context
 # --- Import application-specific components ---
 import os
 import sys
-from src.common.database import Base, get_db_url, _oauth_token # Import Base, helper, and OAuth token
+from src.common.database import Base, get_db_url, _generate_lakebase_token  # Import Base, helper, and token generator
 from src.common.config import get_settings, Settings, init_config # Import settings loader, model, AND initializer
 # Add the project root to the Python path to allow imports from src.*
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -137,15 +137,11 @@ def run_migrations_online() -> None:
             poolclass=pool.NullPool,  # No pooling - completely isolated
         )
         
-        # Register OAuth token injection for Lakebase connections
-        # Access the token from the database module
+        # Register Lakebase token injection for connections
         @event.listens_for(alembic_engine, "do_connect")
-        def inject_oauth_token(dialect, conn_rec, cargs, cparams):
-            # Import here to get the current token value
-            from src.common.database import _oauth_token
-            if _oauth_token:
-                cparams["password"] = _oauth_token
-                logger.debug("env.py: Injected OAuth token into connection")
+        def inject_lakebase_token(dialect, conn_rec, cargs, cparams):
+            cparams["password"] = _generate_lakebase_token(settings)
+            logger.debug("env.py: Injected fresh Lakebase token into connection")
         
         try:
             logger.info(f"env.py: Connecting to database with target_schema={target_schema}")

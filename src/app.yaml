@@ -25,9 +25,12 @@ env:
   # Force search_path via connection options so SP finds the schema
   - name: "PGOPTIONS"
     value: "-c search_path=app_ontos,public"
-  # Fallback for Lakebase when SDK < 0.95.0 can't read postgres app resource
+  # Lakebase Autoscale endpoint for credential generation
+  - name: "ENDPOINT_NAME"
+    value: "projects/dpz-builder-hub-as/branches/production/endpoints/primary"
+  # Legacy fallback (used if ENDPOINT_NAME is unset)
   - name: "LAKEBASE_INSTANCE_NAME"
-    value: "dpz-builder-hub-db"
+    value: "projects/dpz-builder-hub-as/branches/production/endpoints/primary"
   
   - name: "DATABRICKS_WAREHOUSE_ID"
     valueFrom: "sql-warehouse"

@@ -1,7 +1,5 @@
 import os
-import uuid
-import time
-import threading
+
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -56,65 +54,26 @@ _SessionLocal = None
 # Public engine instance (will be assigned after creation)
 engine = None
 
-# OAuth token state for Lakebase connections
-_oauth_token: Optional[str] = None
-_token_last_refresh: float = 0
-_token_refresh_lock = threading.Lock()
-_token_refresh_thread: Optional[threading.Thread] = None
-_token_refresh_stop_event = threading.Event()
 
+def _generate_lakebase_token(settings: 'Settings') -> str:
+    """Mint a fresh Lakebase Autoscale OAuth token.
 
-@dataclass
-class LakebaseInfo:
-    """Connection info for a Lakebase database resource (provisioned or autoscale)."""
-    lakebase_type: str  # "provisioned" or "autoscale"
-    identifier: str     # instance_name (provisioned) or endpoint resource name (autoscale)
-
-
-# Cached LakebaseInfo to avoid repeated API calls during token refreshes
-_lakebase_info: Optional[LakebaseInfo] = None
-
-
-def get_lakebase_info(app_name: str, ws_client) -> Optional[LakebaseInfo]:
-    """Detect the Lakebase type (provisioned or autoscale) from the Databricks App resources
-    and return the identifier needed for credential generation.
-
-    For provisioned Lakebase, returns the instance name from ``resource.database``.
-    For autoscale Lakebase, discovers the endpoint via ``resource.postgres.branch``
-    and ``ws_client.postgres.list_endpoints``.
-
-    The result is cached globally so subsequent token refreshes skip the API calls.
+    Called per-connection by the SQLAlchemy ``do_connect`` hook.
+    No caching — tokens are cheap to mint and pool_recycle=2700
+    ensures connections rotate well before the 1-hour expiry.
     """
-    global _lakebase_info
-    if _lakebase_info is not None:
-        return _lakebase_info
+    ws_client = get_workspace_client(settings)
+    endpoint = os.environ.get("ENDPOINT_NAME") or settings.LAKEBASE_INSTANCE_NAME
+    if not endpoint:
+        raise ValueError(
+            "ENDPOINT_NAME or LAKEBASE_INSTANCE_NAME must be set for Lakebase auth"
+        )
+    cred = ws_client.postgres.generate_database_credential(endpoint=endpoint)
+    logger.debug("Minted fresh Lakebase token for endpoint: %s", endpoint)
+    return cred.token
 
-    try:
-        app_info = ws_client.apps.get(app_name)
-        if app_info.resources:
-            for resource in app_info.resources:
-                # Provisioned Lakebase — resource.database with instance_name
-                if resource.database is not None:
-                    _lakebase_info = LakebaseInfo("provisioned", resource.database.instance_name)
-                    logger.info(f"Detected provisioned Lakebase instance: {_lakebase_info.identifier}")
-                    return _lakebase_info
 
-                # Autoscale Lakebase — resource.postgres with branch
-                # Use hasattr for SDK compatibility (postgres attr added in SDK >=0.95.0)
-                if hasattr(resource, 'postgres') and resource.postgres is not None:
-                    branch = resource.postgres.branch
-                    logger.info(f"Detected autoscale Lakebase resource on branch: {branch}")
-                    endpoints = list(ws_client.postgres.list_endpoints(parent=branch))
-                    if endpoints:
-                        endpoint_name = endpoints[0].name
-                        _lakebase_info = LakebaseInfo("autoscale", endpoint_name)
-                        logger.info(f"Resolved autoscale Lakebase endpoint: {endpoint_name}")
-                        return _lakebase_info
-                    else:
-                        logger.error(f"No endpoints found for autoscale Lakebase branch: {branch}")
-    except Exception as e:
-        logger.error(f"Failed to get Lakebase info for app {app_name}: {e}")
-    return None
+
 
 
 @dataclass
@@ -282,82 +241,7 @@ class DatabaseManager:
 db_manager: Optional[DatabaseManager] = None
 
 
-def refresh_oauth_token(settings: Settings) -> str:
-    """Generate fresh OAuth token from Databricks for Lakebase connection."""
-    global _oauth_token, _token_last_refresh
-    
-    with _token_refresh_lock:
-        ws_client = get_workspace_client(settings)
-        info = get_lakebase_info(settings.DATABRICKS_APP_NAME, ws_client)
-        
-        if not info and settings.LAKEBASE_INSTANCE_NAME:
-            # Fallback: use LAKEBASE_INSTANCE_NAME env var when app resource lookup fails
-            identifier = settings.LAKEBASE_INSTANCE_NAME
-            logger.info(f"Using LAKEBASE_INSTANCE_NAME fallback: {identifier}")
-            if identifier.startswith("projects/"):
-                # If it's a branch path (no /endpoints/), discover the endpoint
-                if "/endpoints/" not in identifier:
-                    try:
-                        endpoints = list(ws_client.postgres.list_endpoints(parent=identifier))
-                        if endpoints:
-                            identifier = endpoints[0].name
-                            logger.info(f"Resolved fallback branch to endpoint: {identifier}")
-                        else:
-                            logger.error(f"No endpoints found for fallback branch: {identifier}")
-                    except Exception as ep_err:
-                        logger.error(f"Failed to list endpoints for fallback: {ep_err}")
-                info = LakebaseInfo("autoscale", identifier)
-            else:
-                info = LakebaseInfo("provisioned", identifier)
 
-        if not info:
-            raise ValueError(f"Could not determine Lakebase info for app '{settings.DATABRICKS_APP_NAME}'")
-        
-        logger.info(f"Generating OAuth token for Lakebase ({info.lakebase_type}): {info.identifier}")
-
-        if info.lakebase_type == "provisioned":
-            cred = ws_client.database.generate_database_credential(
-                request_id=str(uuid.uuid4()),
-                instance_names=[info.identifier],
-            )
-        else:
-            cred = ws_client.postgres.generate_database_credential(
-                endpoint=info.identifier,
-            )
-        
-        _oauth_token = cred.token
-        _token_last_refresh = time.time()
-        logger.info("OAuth token refreshed successfully")
-        
-        return _oauth_token
-
-
-def start_token_refresh_background(settings: Settings):
-    """Start background thread to refresh OAuth tokens every 50 minutes."""
-    global _token_refresh_thread, _token_refresh_stop_event
-    
-    def refresh_loop():
-        while not _token_refresh_stop_event.is_set():
-            _token_refresh_stop_event.wait(50 * 60)  # 50 minutes
-            if not _token_refresh_stop_event.is_set():
-                try:
-                    refresh_oauth_token(settings)
-                except Exception as e:
-                    logger.error(f"Background token refresh failed: {e}", exc_info=True)
-    
-    _token_refresh_stop_event.clear()
-    _token_refresh_thread = threading.Thread(target=refresh_loop, daemon=True)
-    _token_refresh_thread.start()
-    logger.info("OAuth token refresh background thread started")
-
-
-def stop_token_refresh_background():
-    """Stop the background token refresh thread."""
-    global _token_refresh_stop_event, _token_refresh_thread
-    if _token_refresh_thread and _token_refresh_thread.is_alive():
-        _token_refresh_stop_event.set()
-        _token_refresh_thread.join(timeout=2)
-        logger.info("OAuth token refresh background thread stopped")
 
 
 def _use_password_auth(settings: Settings) -> bool:
@@ -423,7 +307,7 @@ def get_db_url(settings: Settings) -> str:
         query_params["options"] = " ".join(options_list)
     
     db_url_obj = URL.create(
-        drivername="postgresql+psycopg2",
+        drivername="postgresql+psycopg",
         username=username,
         password=password,
         host=settings.PGHOST,
@@ -431,11 +315,11 @@ def get_db_url(settings: Settings) -> str:
         database=settings.PGDATABASE,
         query=query_params if query_params else None
     )
-    url_str = db_url_obj.render_as_string(hide_password=False)
     logger.debug(
         f"Constructed PostgreSQL SQLAlchemy URL using URL.create (credentials redacted in log): "
         f"{db_url_obj.render_as_string(hide_password=True)}"
     )
+    url_str = db_url_obj.render_as_string(hide_password=False)
     return url_str
 
 
@@ -485,15 +369,11 @@ def ensure_database_and_schema_exist(settings: Settings):
     logger.info(f"Username: {username}")
     logger.debug(f"Target database: {target_db}, schema: {target_schema}")
     
-    # Generate initial OAuth token for OAuth mode
-    if not is_local_mode:
-        refresh_oauth_token(settings)
-    
     # Build connection URL
     # In OAuth mode, connect directly to the target database (must be pre-created)
     # In LOCAL mode, connect to the target database (should already exist)
     connection_url = URL.create(
-        drivername="postgresql+psycopg2",
+        drivername="postgresql+psycopg",
         username=username,
         password=settings.PGPASSWORD if is_local_mode else "",
         host=settings.PGHOST,
@@ -507,13 +387,11 @@ def ensure_database_and_schema_exist(settings: Settings):
         isolation_level="AUTOCOMMIT"  # Needed for CREATE SCHEMA
     )
     
-    # Inject OAuth token for connections in OAuth mode
+    # Inject Lakebase token for connections in OAuth mode
     if not is_local_mode:
         @event.listens_for(temp_engine, "do_connect")
         def inject_token_temp(dialect, conn_rec, cargs, cparams):
-            global _oauth_token
-            if _oauth_token:
-                cparams["password"] = _oauth_token
+            cparams["password"] = _generate_lakebase_token(settings)
     
     try:
         # In OAuth mode, verify we can connect to the target database
@@ -719,29 +597,20 @@ def init_db() -> None:
                                 pool_size=settings.DB_POOL_SIZE, 
                                 max_overflow=settings.DB_MAX_OVERFLOW,
                                 pool_timeout=settings.DB_POOL_TIMEOUT,
-                                pool_recycle=settings.DB_POOL_RECYCLE,
+                                pool_recycle=2700,  # 45-min defensive recycle before 1-hour Lakebase token expiry
                                 pool_pre_ping=True)
         engine = _engine # Assign to public variable
 
         # Add OAuth token injection if using Lakebase OAuth auth
         if not _use_password_auth(settings):
-            logger.info("Setting up OAuth token injection for Lakebase...")
+            logger.info("Setting up per-connection Lakebase token injection...")
             
-            # Generate initial token
-            refresh_oauth_token(settings)
-            
-            # Register event handler to inject tokens for new connections
-            # Use 'do_connect' event to inject password at connection creation time
             @event.listens_for(_engine, "do_connect")
             def inject_token_on_connect(dialect, conn_rec, cargs, cparams):
-                global _oauth_token
-                if _oauth_token:
-                    cparams["password"] = _oauth_token
-                    logger.debug("Injected OAuth token into new database connection")
+                cparams["password"] = _generate_lakebase_token(settings)
+                logger.debug("Injected fresh Lakebase token into new database connection")
             
-            # Start background refresh thread
-            start_token_refresh_background(settings)
-            logger.info("OAuth authentication configured successfully")
+            logger.info("Lakebase OAuth configured (per-connection token mint, pool_recycle=2700)")
         else:
             logger.info("Password authentication configured for LOCAL mode")
 
@@ -822,11 +691,11 @@ def init_db() -> None:
                 subprocess_env = os.environ.copy()
                 is_lakebase_mode = not _use_password_auth(settings)
                 if is_lakebase_mode:
-                    # Refresh token to ensure it's valid for the subprocess
-                    logger.info("Refreshing OAuth token for Alembic subprocess...")
-                    token = refresh_oauth_token(settings)
+                    # Mint a fresh Lakebase token for the Alembic subprocess
+                    logger.info("Minting Lakebase token for Alembic subprocess...")
+                    token = _generate_lakebase_token(settings)
                     subprocess_env["ALEMBIC_DB_PASSWORD"] = token
-                    logger.info("OAuth token passed to subprocess via environment variable")
+                    logger.info("Lakebase token passed to subprocess via ALEMBIC_DB_PASSWORD")
 
                 # Find Python executable reliably for containerized environments
                 python_executable = None
@@ -1039,9 +908,6 @@ def set_session_factory(factory):
 def cleanup_db():
     """Cleanup database resources including OAuth token refresh."""
     global _engine, _SessionLocal, engine
-    
-    # Stop token refresh if running
-    stop_token_refresh_background()
     
     # Dispose engine
     if _engine:
