@@ -82,6 +82,7 @@ export default function WishDetailView() {
   const [matchDialogOpen, setMatchDialogOpen] = useState(false);
   const [matchQuery, setMatchQuery] = useState('');
   const [matchResults, setMatchResults] = useState<any[]>([]);
+  const [matchScore, setMatchScore] = useState<{ match_score: number; capabilities: any[]; best_matches: any[] } | null>(null);
 
   useEffect(() => {
     setStaticSegments([{ label: 'Wishlist', path: '/wishlist' }]);
@@ -102,6 +103,11 @@ export default function WishDetailView() {
       }
       if (!capsResp.error && capsResp.data?.items) {
         setAllCapabilities(capsResp.data.items);
+      }
+      // Fetch match score
+      const scoreResp = await apiGet<any>(`/api/dpz/wishlist/${wishId}/match-score`);
+      if (!scoreResp.error && scoreResp.data) {
+        setMatchScore(scoreResp.data);
       }
     } catch {} finally { setLoading(false); }
   }, [wishId, apiGet, setDynamicTitle]);
@@ -295,6 +301,81 @@ export default function WishDetailView() {
               )}
             </CardContent>
           </Card>
+
+          {/* Coverage Score */}
+          {matchScore && matchScore.capabilities.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  Capability Coverage Score
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Score ring */}
+                <div className="flex items-center gap-6 mb-4">
+                  <div className="relative h-20 w-20 shrink-0">
+                    <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
+                      <circle cx="18" cy="18" r="15.9" fill="none" className="stroke-muted" strokeWidth="3" />
+                      <circle cx="18" cy="18" r="15.9" fill="none"
+                        className={matchScore.match_score >= 80 ? 'stroke-green-500' : matchScore.match_score >= 40 ? 'stroke-amber-500' : 'stroke-red-500'}
+                        strokeWidth="3" strokeDasharray={`${matchScore.match_score} ${100 - matchScore.match_score}`}
+                        strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-lg font-bold">{matchScore.match_score}%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {matchScore.capabilities.filter(c => c.covered).length} of {matchScore.capabilities.length} capabilities covered
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {matchScore.match_score >= 80 ? 'Strong coverage — existing assets address most needs'
+                       : matchScore.match_score >= 40 ? 'Partial coverage — some capabilities need new builds'
+                       : 'Low coverage — significant gap, new build recommended'}
+                    </p>
+                  </div>
+                </div>
+                {/* Per-capability coverage */}
+                <div className="space-y-1.5">
+                  {matchScore.capabilities.map(c => (
+                    <div key={c.slug} className="flex items-center gap-2 text-sm">
+                      {c.covered ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                      ) : (
+                        <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                      )}
+                      <span className={c.covered ? '' : 'text-muted-foreground'}>{c.name}</span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">
+                        {c.asset_count} asset{c.asset_count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {/* Best matching assets */}
+                {matchScore.best_matches.length > 0 && (
+                  <div className="mt-4 pt-3 border-t">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Best Matches</p>
+                    <div className="space-y-1.5">
+                      {matchScore.best_matches.map(b => (
+                        <button
+                          key={b.id}
+                          className="flex items-center gap-2 w-full text-left rounded-lg border p-2.5 hover:border-primary/20 transition-colors text-sm"
+                          onClick={() => navigate(`/assets/${b.id}`)}
+                        >
+                          <Package className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span className="flex-1 truncate font-medium">{b.name}</span>
+                          <Badge variant="outline" className="text-[9px] font-mono shrink-0">
+                            {b.coverage_pct}% match
+                          </Badge>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Linked asset (match) */}
           <Card>

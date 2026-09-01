@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Briefcase, ArrowRight, TrendingUp, Activity, CheckCircle2,
-  FlaskConical, Package, Upload,
+  FlaskConical, Package, Upload, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +47,7 @@ export default function MyPortfolioView() {
   const [assets, setAssets] = useState<PortfolioAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [capMap, setCapMap] = useState<Record<string, { slug: string; name: string; category: string }[]>>({});
+  const [staleness, setStaleness] = useState<Record<string, { score: number; label: string }>>({});
   const [user, setUser] = useState('');
 
   useEffect(() => {
@@ -67,6 +68,8 @@ export default function MyPortfolioView() {
         setUser(resp.data.user || '');
       }
       if (!capsResp.error && capsResp.data?.by_asset) setCapMap(capsResp.data.by_asset);
+      const staleResp = await apiGet<any>('/api/dpz/staleness');
+      if (!staleResp.error && staleResp.data?.by_asset) setStaleness(staleResp.data.by_asset);
     } catch {} finally { setLoading(false); }
   }, [apiGet]);
 
@@ -76,6 +79,8 @@ export default function MyPortfolioView() {
   const totalAdoptions = useMemo(() => assets.reduce((s, a) => s + (a.install_count || 0), 0), [assets]);
   const prodCount = useMemo(() => assets.filter(a => a.maturity === 'production').length, [assets]);
   const labCount = useMemo(() => assets.filter(a => ['idea', 'triaged', 'poc'].includes(a.maturity)).length, [assets]);
+  const staleCount = useMemo(() => assets.filter(a => staleness[a.id]?.label === 'stale').length, [assets, staleness]);
+  const coolingCount = useMemo(() => assets.filter(a => staleness[a.id]?.label === 'cooling').length, [assets, staleness]);
 
   // Group by maturity
   const grouped = useMemo(() => {
@@ -114,6 +119,26 @@ export default function MyPortfolioView() {
           <StatCard label="In Production" value={prodCount} icon={CheckCircle2} />
           <StatCard label="In Lab" value={labCount} icon={FlaskConical} />
         </div>
+      )}
+
+      {/* Needs attention banner */}
+      {!loading && (staleCount > 0 || coolingCount > 0) && (
+        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardContent className="py-3 flex items-center gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">
+                {staleCount > 0 && <span className="text-red-600">{staleCount} stale</span>}
+                {staleCount > 0 && coolingCount > 0 && ' and '}
+                {coolingCount > 0 && <span className="text-amber-600">{coolingCount} cooling</span>}
+                {' '}asset{staleCount + coolingCount !== 1 ? 's' : ''} in your portfolio
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Consider updating signals, publishing a new version, or promoting to the next maturity stage.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Maturity pipeline */}
@@ -209,6 +234,11 @@ export default function MyPortfolioView() {
                         <div className="text-[9px] text-muted-foreground font-mono">adopts</div>
                       </div>
                       <HealthIcon className={cn('h-4 w-4', hi.color)} />
+                      {staleness[asset.id] && staleness[asset.id].label !== 'active' && (
+                        <AlertTriangle className={cn('h-3.5 w-3.5',
+                          staleness[asset.id].label === 'stale' ? 'text-red-500' : 'text-amber-500'
+                        )} />
+                      )}
                       {asset.scope && asset.scope !== 'draft' && (
                         <Badge variant="secondary" className="text-[9px] font-mono">{asset.scope}</Badge>
                       )}

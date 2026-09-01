@@ -1,13 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap, ExternalLink, FileText, GitBranch, Megaphone,
-  BookOpen, Search, Filter, Calendar, Tag,
+  BookOpen, Search, Filter, Calendar, Tag, Plus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useApi } from '@/hooks/use-api';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
@@ -100,11 +105,19 @@ export default function LearnView() {
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
-  const { get: apiGet } = useApi();
+  const { get: apiGet, post: apiPost } = useApi();
+  const { toast } = useToast();
   const [items, setItems] = useState<LearnItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [newSource, setNewSource] = useState('blog');
+  const [newUrl, setNewUrl] = useState('');
+  const [newTags, setNewTags] = useState('');
+  const [newAuthor, setNewAuthor] = useState('');
 
   useEffect(() => {
     setStaticSegments([]);
@@ -145,10 +158,74 @@ export default function LearnView() {
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2">
             Guides, repos, and release notes
           </h1>
-          <p className="text-sm text-muted-foreground max-w-xl">
+          <p className="text-sm text-muted-foreground max-w-xl mb-4">
             Everything the team has published — blogs, code repositories, how-to guides, and release
             announcements — all in one searchable hub.
           </p>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="rounded-xl px-5 gap-2">
+                <Plus className="h-4 w-4" /> Share Content
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Share with the team</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 pt-2">
+                <div className="space-y-1">
+                  <Label>Title *</Label>
+                  <Input placeholder="e.g. How We Built X" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Description</Label>
+                  <Textarea placeholder="Brief summary..." value={newDesc} onChange={e => setNewDesc(e.target.value)} rows={2} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Type</Label>
+                    <Select value={newSource} onValueChange={setNewSource}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="blog">Blog</SelectItem>
+                        <SelectItem value="repo">Repository</SelectItem>
+                        <SelectItem value="howto">How-To</SelectItem>
+                        <SelectItem value="release">Release Note</SelectItem>
+                        <SelectItem value="external">External</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Author</Label>
+                    <Input placeholder="Your name or team" value={newAuthor} onChange={e => setNewAuthor(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>URL</Label>
+                  <Input placeholder="https://..." value={newUrl} onChange={e => setNewUrl(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Tags (comma-separated)</Label>
+                  <Input placeholder="agents, mlflow, governance" value={newTags} onChange={e => setNewTags(e.target.value)} />
+                </div>
+                <Button className="w-full" disabled={!newTitle.trim()} onClick={async () => {
+                  const resp = await apiPost<any>('/api/dpz/learn', {
+                    title: newTitle, description: newDesc, source: newSource,
+                    url: newUrl || '#', author: newAuthor || undefined,
+                    tags: newTags.split(',').map(t => t.trim()).filter(Boolean),
+                  });
+                  if (!resp.error) {
+                    toast({ title: 'Shared!', description: `"${newTitle}" added to Learn.` });
+                    setAddOpen(false); setNewTitle(''); setNewDesc(''); setNewUrl(''); setNewTags(''); setNewAuthor('');
+                    const r2 = await apiGet<any>('/api/dpz/learn');
+                    if (!r2.error && r2.data?.items) setItems(r2.data.items);
+                  }
+                }}>
+                  Publish
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
         <div className="absolute -right-12 -top-12 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
       </div>
