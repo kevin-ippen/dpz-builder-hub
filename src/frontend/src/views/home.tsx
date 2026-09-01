@@ -409,22 +409,34 @@ export default function HomeView() {
                 }
               />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {recent.map((a) => (
-                  <button
-                    key={a.id}
-                    className="text-left rounded-xl border p-4 hover:shadow-card-hover hover:border-primary/20 hover:-translate-y-0.5 transition-all group"
-                    onClick={() => navigate(`/assets/${a.id}`)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{a.name}</p>
-                      {a.latest_version && (
-                        <Badge variant="outline" className="text-[9px] font-mono shrink-0 px-1.5 py-0">v{a.latest_version}</Badge>
+                {recent.map((a) => {
+                  const hUrl = heroImages[a.id];
+                  return (
+                    <button
+                      key={a.id}
+                      className="text-left rounded-xl border overflow-hidden hover:shadow-card-hover hover:border-primary/20 hover:-translate-y-0.5 transition-all group"
+                      onClick={() => navigate(`/assets/${a.id}`)}
+                    >
+                      {hUrl ? (
+                        <div className="h-20 overflow-hidden bg-muted">
+                          <img src={hUrl} alt={a.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        </div>
+                      ) : (
+                        <div className="h-10 bg-gradient-to-r from-primary/5 to-primary/10" />
                       )}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">{a.type_name}</p>
-                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1">{a.description || ''}</p>
-                  </button>
-                ))}
+                      <div className="p-4">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{a.name}</p>
+                          {a.latest_version && (
+                            <Badge variant="outline" className="text-[9px] font-mono shrink-0 px-1.5 py-0">v{a.latest_version}</Badge>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">{a.type_name}</p>
+                        <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1">{a.description || ''}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </section>
           )}
