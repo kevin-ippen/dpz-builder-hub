@@ -6,6 +6,7 @@ import {
     BarChart3,
     Settings,
     Target,
+    GraduationCap,
     type LucideIcon,
   } from 'lucide-react';
   
@@ -26,7 +27,7 @@ import {
   }
   
   export const features: FeatureConfig[] = [
-    // ─── Discover ─── Find things to reuse, understand the landscape
+    // ─── Discover ─── Find, learn, and explore the landscape
     {
       id: 'assets',
       name: 'Explore',
@@ -41,25 +42,26 @@ import {
       id: 'lab',
       name: 'Lab',
       path: '/lab',
-      description: 'Experimental builds, vibe projects, and community contributions — pre-production work.',
+      description: 'Experimental builds, submit new ideas, and community contributions — pre-production work.',
       icon: FlaskConical,
       group: 'Discover',
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'assets',
     },
-
-    // ─── Create ─── Contribute ideas, manage your portfolio
     {
-      id: 'data-products',
-      name: 'Submit',
-      path: '/submit',
-      description: 'Register an idea, POC, or production asset — starts at maturity=idea.',
-      icon: Lightbulb,
-      group: 'Create',
+      id: 'learn',
+      name: 'Learn',
+      path: '/learn',
+      description: 'Blogs, release notes, repos, and how-to guides — everything in one place.',
+      icon: GraduationCap,
+      group: 'Discover',
       maturity: 'ga',
       showInLanding: true,
+      permissionId: 'assets',
     },
+
+    // ─── My Stuff ─── Your portfolio and wishlist
     {
       id: 'my-products',
       name: 'My Portfolio',
@@ -75,7 +77,7 @@ import {
       id: 'my-requests',
       name: 'Wishlist',
       path: '/wishlist',
-      description: 'What the team needs next — upvote to signal demand.',
+      description: 'What the team needs next — upvote to signal demand, seeded by leadership priorities.',
       icon: Target,
       group: 'Create',
       maturity: 'ga',
@@ -83,21 +85,18 @@ import {
       permissionId: 'data-products',
     },
 
-
-    // ─── Observe ─── Single dashboard: portfolio landscape, adoption, health
+    // ─── Observe ─── Portfolio health, metrics, admin
     {
       id: 'dashboard',
       name: 'Dashboard',
       path: '/dashboard',
-      description: 'Portfolio health, adoption signals, and cost/quality at a glance.',
+      description: 'Portfolio health, adoption signals, staleness alerts, and capability coverage.',
       icon: BarChart3,
       group: 'Observe',
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'assets',
     },
-
-    // ─── Admin ─── Platform administration, only for admins/SAs
     {
       id: 'settings',
       name: 'Settings',
@@ -107,6 +106,18 @@ import {
       group: 'Observe',
       maturity: 'ga',
       showInLanding: false,
+    },
+
+    // ─── Hidden routes (accessible but not in sidebar) ───
+    {
+      id: 'data-products',
+      name: 'Submit',
+      path: '/submit',
+      description: 'Register an idea, POC, or production asset.',
+      icon: Lightbulb,
+      group: 'Discover',
+      maturity: 'ga',
+      showInLanding: false,  // hidden from nav — accessed via Lab
     },
   ];
   

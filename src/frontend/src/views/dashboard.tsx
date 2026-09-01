@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart3, TrendingUp, Activity, ShieldCheck, Lightbulb,
   FlaskConical, Package, ThumbsUp, ArrowRight, CheckCircle2,
-  Clock, X, GitPullRequest,
+  Clock, X, GitPullRequest, AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +71,7 @@ export default function DashboardView() {
   const [capabilities, setCapabilities] = useState<CapItem[]>([]);
   const [promotions, setPromotions] = useState<any[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
+  const [staleness, setStaleness] = useState<Record<string, { score: number; label: string }>>({});
 
   useEffect(() => {
     setStaticSegments([]); setDynamicTitle('Dashboard');
@@ -106,6 +107,11 @@ export default function DashboardView() {
         });
         setCapAssetCounts(counts);
       }
+      // Fetch staleness scores
+      const staleRes = await apiGet<any>('/api/dpz/staleness');
+      if (!staleRes.error && staleRes.data?.by_asset) {
+        setStaleness(staleRes.data.by_asset);
+      }
     })();
   }, [apiGet]);
 
@@ -119,6 +125,17 @@ export default function DashboardView() {
   }, [portfolio]);
   const openWishes = useMemo(() => wishlist.filter(w => w.status === 'open').length, [wishlist]);
   const totalUpvotes = useMemo(() => wishlist.reduce((s, w) => s + w.upvotes, 0), [wishlist]);
+
+  // Staleness alerts: top stale + cooling assets
+  const staleAlerts = useMemo(() => {
+    return Object.entries(staleness)
+      .filter(([, s]) => s.label !== 'active')
+      .sort((a, b) => b[1].score - a[1].score)
+      .slice(0, 5);
+  }, [staleness]);
+
+  const staleCount = useMemo(() => Object.values(staleness).filter(s => s.label === 'stale').length, [staleness]);
+  const coolingCount = useMemo(() => Object.values(staleness).filter(s => s.label === 'cooling').length, [staleness]);
 
   // Capability coverage: how many wishes need each capability
   const capCoverage = useMemo(() => {
@@ -160,6 +177,23 @@ export default function DashboardView() {
         <StatCard label="In Lab" value={labCount} icon={FlaskConical} sub="Pre-production" />
         <StatCard label="Open Wishes" value={openWishes} icon={Lightbulb} sub={`${totalUpvotes} total upvotes`} />
         <StatCard label="Evidence Score" value={evidence.length > 0 ? `${Math.round(evidence.reduce((s, e) => s + e.evidence_score, 0) / evidence.length)}%` : '—'} icon={ShieldCheck} sub="Avg across assets" />
+      {/* Staleness summary mini-card */}
+      {staleCount + coolingCount > 0 && (
+        <Card className="md:col-span-4 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardContent className="py-3 flex items-center gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span className="text-sm">
+              <span className="font-semibold">{staleCount} stale</span> and <span className="font-semibold">{coolingCount} cooling</span> assets need attention
+            </span>
+            <Button variant="ghost" size="sm" className="text-xs ml-auto" onClick={() => {
+              const el = document.getElementById('staleness-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}>
+              Review <ArrowRight className="ml-1 h-3 w-3" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       </div>
 
       {/* ═══ Maturity Pipeline ═══ */}
@@ -203,7 +237,45 @@ export default function DashboardView() {
           {!portfolio ? (
             <p className="text-center text-muted-foreground py-8">Loading...</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-6">
+              {/* Staleness Alerts */}
+              {staleAlerts.length > 0 && (
+                <Card id="staleness-section">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-amber-600 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3 w-3" /> Needs Attention
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-1.5">
+                      {staleAlerts.map(([assetId, s]) => {
+                        const asset = health.find(h => h.id === assetId) || evidence.find(e => e.id === assetId);
+                        const name = asset?.name || assetId.slice(0, 8);
+                        return (
+                          <button
+                            key={assetId}
+                            className="w-full flex items-center gap-3 rounded-lg border p-2.5 text-left hover:bg-muted/50 transition-all"
+                            onClick={() => navigate(`/assets/${assetId}`)}
+                          >
+                            <AlertTriangle className={cn('h-3.5 w-3.5 shrink-0', s.label === 'stale' ? 'text-red-500' : 'text-amber-500')} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{name}</p>
+                              <p className="text-[10px] text-muted-foreground">{asset?.type_name || ''}</p>
+                            </div>
+                            <Badge variant="outline" className={cn('text-[9px] font-mono',
+                              s.label === 'stale' ? 'border-red-300 text-red-600' : 'border-amber-300 text-amber-600'
+                            )}>
+                              {s.label} ({Math.round(s.score * 100)}%)
+                            </Badge>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">By Type</CardTitle></CardHeader>
                 <CardContent>
@@ -270,6 +342,7 @@ export default function DashboardView() {
                   </CardContent>
                 </Card>
               )}
+              </div>
             </div>
           )}
         </TabsContent>

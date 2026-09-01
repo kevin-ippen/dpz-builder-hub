@@ -1648,17 +1648,6 @@ def review_promotion(promotion_id: str, body: dict, db: DBSessionDep, request: R
     return {"id": promotion_id, "status": new_status}
 
 
-@dpz_router.get("/marketplace/stats")
-def get_marketplace_stats(db: DBSessionDep):
-    """Aggregate marketplace stats for hero counters."""
-    import sqlalchemy as sa
-    total = db.execute(sa.text("SELECT count(*) FROM assets")).scalar() or 0
-    versions = db.execute(sa.text("SELECT count(*) FROM asset_versions")).scalar() or 0
-    installs = db.execute(sa.text("SELECT COALESCE(sum(install_count), 0) FROM assets")).scalar() or 0
-    contributors = db.execute(sa.text("SELECT count(DISTINCT created_by) FROM assets WHERE created_by IS NOT NULL")).scalar() or 0
-    return {"total_assets": total, "total_versions": versions, "total_installs": int(installs), "contributors": contributors}
-
-
 # ─── Activity Feed (domain events) ───────────────────────────────────
 
 @dpz_router.get("/activity")
@@ -2000,6 +1989,86 @@ def add_asset_image(asset_id: str, body: dict, db: DBSessionDep):
     })
     db.commit()
     return {"id": img_id}
+
+
+# ─── Staleness / Freshness scoring ────────────────────────────────────
+
+@dpz_router.get("/staleness")
+def get_staleness_scores(db: DBSessionDep):
+    """Compute staleness risk for every asset based on signals, versions, and engagement.
+
+    Returns a dict keyed by asset_id so the frontend can merge it into any view.
+    Score 0-1 where higher = more stale.  Label: active / cooling / stale.
+    """
+    import sqlalchemy as sa
+    rows = db.execute(sa.text("""
+        WITH signal_stats AS (
+            SELECT
+                asset_id,
+                MAX(observed_at) AS last_signal_at,
+                COUNT(*) FILTER (WHERE observed_at > NOW() - INTERVAL '90 days') AS signals_90d
+            FROM asset_signals
+            GROUP BY asset_id
+        ),
+        version_stats AS (
+            SELECT asset_id, MAX(created_at) AS last_version_at
+            FROM asset_versions
+            GROUP BY asset_id
+        ),
+        raw AS (
+            SELECT
+                a.id,
+                -- Signal recency: 0 = signal today, 1 = no signal in 90+ days
+                LEAST(EXTRACT(EPOCH FROM (NOW() - COALESCE(ss.last_signal_at, a.created_at)))
+                      / (90 * 86400), 1.0) AS sig_stale,
+                -- Version recency: 0 = released today, 1 = no release in 180+ days
+                LEAST(EXTRACT(EPOCH FROM (NOW() - COALESCE(vs.last_version_at, a.created_at)))
+                      / (180 * 86400), 1.0) AS ver_stale,
+                -- Engagement: 0/3 signals in 90d → 1.0, <5 → 0.5, >=5 → 0
+                CASE WHEN COALESCE(ss.signals_90d, 0) = 0 THEN 1.0
+                     WHEN COALESCE(ss.signals_90d, 0) < 5  THEN 0.5
+                     ELSE 0.0 END AS eng_stale,
+                -- Aging early-stage penalty
+                CASE WHEN a.maturity IN ('idea', 'triaged')
+                      AND EXTRACT(EPOCH FROM (NOW() - a.created_at)) > 90 * 86400
+                     THEN 0.5 ELSE 0.0 END AS age_penalty,
+                -- Asset updated_at recency
+                LEAST(EXTRACT(EPOCH FROM (NOW() - a.updated_at)) / (60 * 86400), 1.0) AS update_stale
+            FROM assets a
+            LEFT JOIN signal_stats  ss ON ss.asset_id = a.id
+            LEFT JOIN version_stats vs ON vs.asset_id = a.id
+        )
+        SELECT
+            id,
+            ROUND((0.25 * sig_stale + 0.20 * ver_stale + 0.20 * eng_stale
+                   + 0.15 * age_penalty + 0.20 * update_stale)::numeric, 3) AS score
+        FROM raw
+    """))
+    result = {}
+    for r in rows:
+        score = float(r[1])
+        label = 'stale' if score > 0.7 else ('cooling' if score > 0.4 else 'active')
+        result[str(r[0])] = {"score": score, "label": label}
+    return {"by_asset": result}
+
+
+@dpz_router.get("/marketplace/stats")
+def get_marketplace_stats_v2(db: DBSessionDep):
+    """Aggregate marketplace stats for hero counters (enhanced with staleness summary)."""
+    import sqlalchemy as sa
+    total = db.execute(sa.text("SELECT count(*) FROM assets")).scalar() or 0
+    featured = db.execute(sa.text("SELECT count(*) FROM assets WHERE featured = true")).scalar() or 0
+    production = db.execute(sa.text("SELECT count(*) FROM assets WHERE maturity = 'production'")).scalar() or 0
+    lab_count = db.execute(sa.text(
+        "SELECT count(*) FROM assets WHERE maturity IN ('idea','triaged','poc','validating')"
+    )).scalar() or 0
+    return {
+        "total": total, "featured": featured, "production": production, "lab": lab_count,
+        # Legacy compat
+        "total_assets": total, "total_versions": db.execute(sa.text("SELECT count(*) FROM asset_versions")).scalar() or 0,
+        "total_installs": int(db.execute(sa.text("SELECT COALESCE(sum(install_count),0) FROM assets")).scalar() or 0),
+        "contributors": db.execute(sa.text("SELECT count(DISTINCT created_by) FROM assets WHERE created_by IS NOT NULL")).scalar() or 0,
+    }
 
 
 def register_routes(app):

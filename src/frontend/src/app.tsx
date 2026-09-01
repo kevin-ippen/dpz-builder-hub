@@ -36,6 +36,7 @@ import MyPortfolioView from './views/my-portfolio';
 import WishlistView from './views/demands';
 import WishDetailView from './views/wish-detail';
 import DashboardView from './views/dashboard';
+import LearnView from './views/learn';
 // Settings / Admin (DPZ-scoped)
 import SettingsLayout from './components/settings/settings-layout';
 import SettingsGeneralView from './views/settings-general';
@@ -101,6 +102,7 @@ export default function App() {
               <Route path="/assets" element={<AssetExplorerView />} />
               <Route path="/assets/:assetId" element={<AssetDetailView />} />
               <Route path="/lab" element={<LabView />} />
+              <Route path="/learn" element={<LearnView />} />
               <Route path="/marketplace" element={<Navigate to="/" replace />} />
               <Route path="/data-catalog" element={<Navigate to="/assets" replace />} />
               <Route path="/data-catalog/*" element={<Navigate to="/assets" replace />} />

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FlaskConical, TrendingUp, Flame, Users, ArrowRight, ThumbsUp, Sparkles } from 'lucide-react';
+import {
+  FlaskConical, TrendingUp, Flame, Users, ArrowRight, ThumbsUp, Sparkles,
+  Plus, Target, Zap, AlertTriangle, ChevronRight,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -155,9 +158,12 @@ export default function LabView() {
 
   const [assets, setAssets] = useState<LabAsset[]>([]);
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'pipeline'>('pipeline');
   const [loading, setLoading] = useState(true);
   const [heroImages, setHeroImages] = useState<Record<string, { image_url: string }>>({}); 
   const [capMap, setCapMap] = useState<Record<string, CapChip[]>>({});
+  const [challenges, setChallenges] = useState<{ id: string; title: string; upvotes: number; capabilities?: { name: string; slug: string }[] }[]>([]);
+  const [staleness, setStaleness] = useState<Record<string, { score: number; label: string }>>({});
 
   const fetchLab = useCallback(async () => {
     setLoading(true);
@@ -188,6 +194,17 @@ export default function LabView() {
       }
       if (!heroes.error && heroes.data?.heroes) setHeroImages(heroes.data.heroes);
       if (!capsRes.error && capsRes.data?.by_asset) setCapMap(capsRes.data.by_asset);
+      // Fetch challenges (top open wishes) and staleness in parallel
+      const [wishRes, staleRes] = await Promise.all([
+        apiGet<any>('/api/dpz/wishlist'),
+        apiGet<any>('/api/dpz/staleness'),
+      ]);
+      if (!wishRes.error && wishRes.data?.items) {
+        setChallenges(wishRes.data.items.filter((w: any) => w.status === 'open').slice(0, 3));
+      }
+      if (!staleRes.error && staleRes.data?.by_asset) {
+        setStaleness(staleRes.data.by_asset);
+      }
     } catch {} finally {
       setLoading(false);
     }
@@ -242,17 +259,21 @@ export default function LabView() {
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2">
             Build → Ship → Get Adopted
           </h1>
-          <p className="text-sm text-muted-foreground max-w-xl">
+          <p className="text-sm text-muted-foreground max-w-xl mb-4">
             Experimental builds, vibe projects, and community contributions.
             Everything here is pre-production — upvote what excites you, and the best work graduates to Explore.
           </p>
+          <Button onClick={() => navigate('/submit')} className="rounded-xl px-5 gap-2">
+            <Plus className="h-4 w-4" /> Submit Your Build
+          </Button>
         </div>
         <div className="absolute -right-12 -top-12 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute -left-8 -bottom-8 w-48 h-48 bg-primary/3 rounded-full blur-2xl" />
       </div>
 
-      {/* Domain filter pills */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      {/* View toggle + domain filter pills */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 flex-wrap">
         {DOMAIN_FILTERS.map((d) => (
           <button
             key={d.id || 'all'}
@@ -267,7 +288,69 @@ export default function LabView() {
             {d.label}
           </button>
         ))}
+        </div>
+        <div className="flex items-center gap-1 border rounded-lg p-0.5">
+          <button
+            className={cn('px-3 py-1 rounded text-[11px] font-mono uppercase transition-colors',
+              viewMode === 'pipeline' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
+            onClick={() => setViewMode('pipeline')}
+          >Pipeline</button>
+          <button
+            className={cn('px-3 py-1 rounded text-[11px] font-mono uppercase transition-colors',
+              viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}
+            onClick={() => setViewMode('grid')}
+          >Grid</button>
+        </div>
       </div>
+
+      {/* ═══ Challenge Board ═══ */}
+      {challenges.length > 0 && (
+        <section>
+          <SectionHeader icon={Target} title="Open Challenges" action={
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate('/wishlist')}>
+              All wishes <ArrowRight className="ml-1 h-3 w-3" />
+            </Button>
+          } />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {challenges.map((ch) => (
+              <Card
+                key={ch.id}
+                className="group cursor-pointer border-dashed border-2 border-primary/20 hover:border-primary/40 hover:shadow-card-hover transition-all rounded-xl"
+                onClick={() => navigate(`/wishlist/${ch.id}`)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-2">
+                    <div className="h-7 w-7 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                      <Zap className="h-3.5 w-3.5 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-mono uppercase text-amber-600 mb-0.5">Challenge</p>
+                      <h4 className="text-sm font-semibold leading-tight truncate group-hover:text-primary transition-colors">
+                        {ch.title}
+                      </h4>
+                      {ch.capabilities && ch.capabilities.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {ch.capabilities.slice(0, 3).map(c => (
+                            <span key={c.slug} className="px-1.5 py-0.5 text-[8px] font-mono rounded border bg-muted/50 text-muted-foreground">
+                              {c.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[10px] text-muted-foreground"><ThumbsUp className="inline h-3 w-3 mr-0.5" />{ch.upvotes} upvotes</span>
+                        <Button size="sm" variant="outline" className="h-5 px-2 text-[9px] font-mono gap-1" onClick={(e) => { e.stopPropagation(); navigate('/submit'); }}>
+                          Start Building <ChevronRight className="h-2.5 w-2.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -278,8 +361,70 @@ export default function LabView() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-8">
           <div className="space-y-8 min-w-0">
-            {/* Hot this week */}
-            {hot.length > 0 && (
+
+            {/* ═══ Pipeline View (Kanban by maturity) ═══ */}
+            {viewMode === 'pipeline' && (
+              <section>
+                <SectionHeader icon={TrendingUp} title="The Pipeline" />
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {LAB_MATURITIES.map(stage => {
+                    const stageConfig = MATURITY_CONFIG[stage];
+                    const stageAssets = filtered.filter(a => a.maturity === stage);
+                    return (
+                      <div key={stage} className="rounded-xl border bg-card/50 p-3">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b">
+                          <div className={cn('w-2 h-2 rounded-full', stageConfig.barColor)} />
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider">{stageConfig.label}</span>
+                          <Badge variant="secondary" className="text-[9px] font-mono ml-auto">{stageAssets.length}</Badge>
+                        </div>
+                        <div className="space-y-2 min-h-[100px]">
+                          {stageAssets.map(a => {
+                            const stale = staleness[a.id];
+                            return (
+                              <div
+                                key={a.id}
+                                className="group p-2.5 rounded-lg border bg-card hover:shadow-card-hover hover:border-primary/25 cursor-pointer transition-all"
+                                onClick={() => navigate(`/assets/${a.id}`)}
+                              >
+                                <div className="flex items-start justify-between gap-1">
+                                  <h4 className="text-xs font-semibold leading-tight truncate group-hover:text-primary transition-colors">
+                                    {a.name}
+                                  </h4>
+                                  {stale && stale.label !== 'active' && (
+                                    <AlertTriangle className={cn('h-3 w-3 shrink-0',
+                                      stale.label === 'stale' ? 'text-red-500' : 'text-amber-500'
+                                    )} />
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                  {a.description || 'No description'}
+                                </p>
+                                <div className="flex items-center justify-between mt-1.5">
+                                  <span className="text-[9px] text-muted-foreground truncate max-w-[80px]">
+                                    {a.created_by?.split('@')[0] || 'unknown'}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-muted-foreground">
+                                    <ThumbsUp className="inline h-2.5 w-2.5 mr-0.5" />{a.install_count}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {stageAssets.length === 0 && (
+                            <div className="text-center py-6">
+                              <p className="text-[10px] text-muted-foreground">No projects</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ═══ Grid View (original Hot + All) ═══ */}
+            {viewMode === 'grid' && hot.length > 0 && (
               <section>
                 <SectionHeader icon={Flame} title="Hot This Week" />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -297,8 +442,7 @@ export default function LabView() {
               </section>
             )}
 
-            {/* All lab projects */}
-            {rest.length > 0 && (
+            {viewMode === 'grid' && rest.length > 0 && (
               <section>
                 <SectionHeader
                   icon={Sparkles}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, FlaskConical, Upload, BarChart3, ArrowRight,
   TrendingUp, Zap, Search, Package, ThumbsUp, Lightbulb,
+  AlertTriangle, GraduationCap,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -145,6 +146,8 @@ export default function HomeView() {
   const [capMap, setCapMap] = useState<Record<string, CapChip[]>>({});
   const [topWishes, setTopWishes] = useState<WishTeaser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [staleness, setStaleness] = useState<{ stale: number; cooling: number }>({ stale: 0, cooling: 0 });
+  const [portfolioByMaturity, setPortfolioByMaturity] = useState<{ stage: string; count: number }[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -168,6 +171,21 @@ export default function HomeView() {
       else if (!sig.error && Array.isArray(sig.data)) setSignals(sig.data.slice(0, 6));
       if (!capsRes.error && capsRes.data?.by_asset) setCapMap(capsRes.data.by_asset);
       if (!wishRes.error && wishRes.data?.items) setTopWishes(wishRes.data.items.filter((w: any) => w.status === 'open').slice(0, 3));
+      // Staleness + portfolio maturity for Org Pulse
+      const [staleRes, portRes] = await Promise.all([
+        apiGet<any>('/api/dpz/staleness'),
+        apiGet<any>('/api/dpz/portfolio'),
+      ]);
+      if (!staleRes.error && staleRes.data?.by_asset) {
+        const vals = Object.values(staleRes.data.by_asset) as { label: string }[];
+        setStaleness({
+          stale: vals.filter(v => v.label === 'stale').length,
+          cooling: vals.filter(v => v.label === 'cooling').length,
+        });
+      }
+      if (!portRes.error && portRes.data?.by_maturity) {
+        setPortfolioByMaturity(portRes.data.by_maturity);
+      }
     } catch {} finally {
       setLoading(false);
     }
@@ -221,13 +239,52 @@ export default function HomeView() {
         <div className="absolute -right-16 -top-16 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
       </div>
 
+      {/* ═══ Org Pulse Strip ═══ */}
+      <section className="rounded-xl border bg-card p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground font-bold">Org Pulse</span>
+        </div>
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Maturity funnel */}
+          {portfolioByMaturity.length > 0 && (
+            <div className="flex items-center gap-px bg-muted rounded-lg overflow-hidden border flex-1">
+              {['idea', 'triaged', 'poc', 'validating', 'production_candidate', 'production'].map(stage => {
+                const m = MATURITY_BADGES[stage];
+                const count = portfolioByMaturity.find(p => p.stage === stage)?.count || 0;
+                return (
+                  <div key={stage} className="flex-1 py-2 px-1.5 text-center relative">
+                    <div className="text-sm font-bold tracking-tight">{count}</div>
+                    <div className="text-[8px] font-mono uppercase tracking-wider text-muted-foreground">{m?.label || stage}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* Staleness alerts */}
+          {(staleness.stale > 0 || staleness.cooling > 0) && (
+            <button
+              className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-2 hover:bg-amber-100/50 transition-colors text-left"
+              onClick={() => navigate('/dashboard')}
+            >
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold">{staleness.stale + staleness.cooling} need attention</p>
+                <p className="text-[10px] text-muted-foreground">{staleness.stale} stale, {staleness.cooling} cooling</p>
+              </div>
+            </button>
+          )}
+        </div>
+      </section>
+
       {/* ═══ Quick Links ═══ */}
       <section>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <QuickLink icon={Box} title="Explore" desc="Browse certified, production-ready assets." to="/assets" />
-          <QuickLink icon={FlaskConical} title="The Lab" desc="Experimental builds and vibe projects." to="/lab" />
-          <QuickLink icon={Upload} title="Submit" desc="Register a new accelerator or project." to="/submit" />
-          <QuickLink icon={BarChart3} title="Dashboard" desc="Portfolio health and adoption metrics." to="/dashboard" />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <QuickLink icon={Box} title="Explore" desc="Browse certified assets." to="/assets" />
+          <QuickLink icon={FlaskConical} title="The Lab" desc="Experiments and builds." to="/lab" />
+          <QuickLink icon={GraduationCap} title="Learn" desc="Guides, repos, releases." to="/learn" />
+          <QuickLink icon={BarChart3} title="Dashboard" desc="Health and adoption." to="/dashboard" />
+          <QuickLink icon={Lightbulb} title="Wishlist" desc="Vote on what to build." to="/wishlist" />
         </div>
       </section>
 
