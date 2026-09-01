@@ -53,8 +53,9 @@ const MATURITY_BADGES: Record<string, { label: string; color: string }> = {
 };
 
 // ─── Compact asset card for featured spotlight ──────────────────────────
-function SpotlightCard({ asset, caps }: { asset: MarketplaceAsset; caps?: CapChip[] }) {
+function SpotlightCard({ asset, caps, heroUrl }: { asset: MarketplaceAsset; caps?: CapChip[]; heroUrl?: string }) {
   const navigate = useNavigate();
+  const [imgErr, setImgErr] = useState(false);
   const badge = MATURITY_BADGES[asset.maturity] || MATURITY_BADGES.idea;
   return (
     <Card
@@ -62,11 +63,15 @@ function SpotlightCard({ asset, caps }: { asset: MarketplaceAsset; caps?: CapChi
       onClick={() => navigate(`/assets/${asset.id}`)}
     >
       <div className="relative h-[100px] overflow-hidden bg-gradient-to-br from-primary/8 via-background to-primary/15">
-        <div className="flex items-end h-full p-4">
-          <span className="text-[9px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">
-            {asset.type_name}
-          </span>
-        </div>
+        {heroUrl && !imgErr ? (
+          <img src={heroUrl} alt={asset.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" onError={() => setImgErr(true)} />
+        ) : (
+          <div className="flex items-end h-full p-4">
+            <span className="text-[9px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              {asset.type_name}
+            </span>
+          </div>
+        )}
         <div className="absolute top-2.5 left-2.5">
           <Badge className={cn('text-[9px] font-mono uppercase border-0 px-1.5 py-0', badge.color)}>
             {badge.label}
@@ -146,6 +151,7 @@ export default function HomeView() {
   const [capMap, setCapMap] = useState<Record<string, CapChip[]>>({});
   const [topWishes, setTopWishes] = useState<WishTeaser[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [heroImages, setHeroImages] = useState<Record<string, string>>({});
   const [staleness, setStaleness] = useState<{ stale: number; cooling: number }>({ stale: 0, cooling: 0 });
   const [portfolioByMaturity, setPortfolioByMaturity] = useState<{ stage: string; count: number }[]>([]);
   const [search, setSearch] = useState('');
@@ -172,10 +178,18 @@ export default function HomeView() {
       if (!capsRes.error && capsRes.data?.by_asset) setCapMap(capsRes.data.by_asset);
       if (!wishRes.error && wishRes.data?.items) setTopWishes(wishRes.data.items.filter((w: any) => w.status === 'open').slice(0, 3));
       // Staleness + portfolio maturity for Org Pulse
-      const [staleRes, portRes] = await Promise.all([
+      const [staleRes, portRes, heroRes] = await Promise.all([
         apiGet<any>('/api/dpz/staleness'),
         apiGet<any>('/api/dpz/portfolio'),
+        apiGet<any>('/api/dpz/images/heroes'),
       ]);
+      if (!heroRes.error && heroRes.data?.by_asset) {
+        const hm: Record<string, string> = {};
+        for (const [aid, imgs] of Object.entries(heroRes.data.by_asset as Record<string, any[]>)) {
+          if (imgs.length > 0) hm[aid] = imgs[0].image_url;
+        }
+        setHeroImages(hm);
+      }
       if (!staleRes.error && staleRes.data?.by_asset) {
         const vals = Object.values(staleRes.data.by_asset) as { label: string }[];
         setStaleness({
@@ -309,7 +323,7 @@ export default function HomeView() {
                 }
               />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {featured.map((a) => <SpotlightCard key={a.id} asset={a} caps={capMap[a.id]} />)}
+                {featured.map((a) => <SpotlightCard key={a.id} asset={a} caps={capMap[a.id]} heroUrl={heroImages[a.id]} />)}
               </div>
             </section>
           )}
