@@ -2411,14 +2411,145 @@ def get_marketplace_stats_v2(db: DBSessionDep):
     }
 
 
-# ─── Auto-Discover from Repo / Workspace ────────────────────────────────
+# ─── Auto-Discover from Repo / Workspace (Evidence-Based) ────────────────
+
+def _make_evidence(value, source: str, confidence: str, reason: str = "") -> dict:
+    """Create an evidence-annotated field: {value, source, confidence, reason}.
+    confidence: 'high' | 'medium' | 'low'
+    """
+    return {"value": value, "source": source, "confidence": confidence, "reason": reason}
+
+
+def _detect_type_from_files(file_list: list[str], readme_text: str = "") -> tuple[str, str, str]:
+    """Detect asset type from file tree structure.
+    Returns (type_slug, confidence, reason).
+    """
+    names_lower = [f.lower() for f in file_list]
+    joined = " ".join(names_lower)
+
+    # Strong structural signals (high confidence)
+    has_app_yaml = any("app.yaml" in f or "app.yml" in f for f in names_lower)
+    has_streamlit = any("streamlit" in f for f in names_lower)
+    has_gradio = any("gradio" in f for f in names_lower)
+    has_dash = any("dash" in f and "dashboard" not in f for f in names_lower)
+    has_fastapi = any("fastapi" in f or "main.py" in f or "app.py" in f for f in names_lower)
+    has_pipeline = any(d in joined for d in ["dags/", "pipeline", "bronze", "silver", "gold", "etl"])
+    has_dlt = any("dlt" in f or "expectations" in f for f in names_lower)
+    has_model = any(d in joined for d in ["mlflow", "model", "training", "train.py", "mlproject"])
+    has_agent = any(d in joined for d in ["agent", "langchain", "langgraph", "tools.py", "supervisor"])
+    has_dashboard = any(d in joined for d in [".lvdash.json", "dashboard"])
+    has_notebook = any(f.endswith(".ipynb") for f in names_lower)
+
+    if has_app_yaml or has_streamlit or has_gradio:
+        return ("application", "high", f"Found {'app.yaml' if has_app_yaml else 'framework files'} in repo structure")
+    if has_fastapi and not has_pipeline:
+        return ("application", "medium", "Found app.py/main.py (could be API or app)")
+    if has_agent:
+        return ("model", "high", "Found agent framework files (agent.py, tools.py, langchain)")
+    if has_dlt or has_pipeline:
+        return ("pipeline", "high", f"Found pipeline artifacts: {', '.join(d for d in ['dags/', 'dlt', 'bronze/silver/gold'] if d in joined)[:60]}")
+    if has_model:
+        return ("model", "high", "Found ML artifacts (mlflow, training scripts, MLproject)")
+    if has_dashboard:
+        return ("dashboard", "medium", "Found dashboard file(s)")
+    if has_notebook and len(file_list) < 5:
+        return ("notebook", "medium", "Repo is primarily notebooks")
+
+    # Weak signals from README (low confidence)
+    readme_lower = readme_text.lower()[:2000]
+    if any(w in readme_lower for w in ["pipeline", "etl", "ingestion", "medallion"]):
+        return ("pipeline", "low", "README mentions pipeline/ETL concepts but no structural evidence")
+    if any(w in readme_lower for w in ["model", "training", "inference"]):
+        return ("model", "low", "README mentions ML concepts but no structural evidence")
+    if any(w in readme_lower for w in ["app", "ui", "frontend"]):
+        return ("application", "low", "README mentions app/UI concepts but no structural evidence")
+
+    return ("accelerator", "low", "No strong type signals detected in file structure or README")
+
+
+def _extract_uc_refs(code_text: str) -> list[dict]:
+    """Extract Unity Catalog table references from code.
+    Returns [{catalog, schema, table, context}].
+    """
+    import re as _re
+    refs = []
+    seen = set()
+    # Match 3-part names: catalog.schema.table
+    for m in _re.finditer(r'\b([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*)\b', code_text.lower()):
+        cat, sch, tbl = m.group(1), m.group(2), m.group(3)
+        # Filter common false positives
+        if cat in ("self", "os", "sys", "np", "pd", "spark", "sc", "df", "col", "this"):
+            continue
+        key = f"{cat}.{sch}.{tbl}"
+        if key not in seen:
+            seen.add(key)
+            # Try to determine if read or write
+            ctx_start = max(0, m.start() - 60)
+            context_text = code_text[ctx_start:m.end() + 20].lower()
+            direction = "read"
+            if any(w in context_text for w in ["insert into", "merge into", "write", "save", "create table", "create or replace"]):
+                direction = "write"
+            refs.append({"catalog": cat, "schema": sch, "table": tbl, "direction": direction})
+    return refs[:20]
+
+
+def _propose_maturity(evidence: dict) -> tuple[str, str, list[str]]:
+    """Propose maturity from gathered evidence.
+    Returns (maturity, confidence, [reasons]).
+    """
+    score = 0
+    reasons = []
+
+    commits = evidence.get("commit_count", 0)
+    committers = evidence.get("committer_count", 0)
+    has_readme = evidence.get("has_readme", False)
+    has_tests = evidence.get("has_tests", False)
+    has_ci = evidence.get("has_ci", False)
+    has_app_yaml = evidence.get("has_app_yaml", False)
+    recent_activity = evidence.get("recent_activity", False)
+    file_count = evidence.get("file_count", 0)
+
+    if commits > 50:
+        score += 3; reasons.append(f"{commits} commits")
+    elif commits > 10:
+        score += 2; reasons.append(f"{commits} commits")
+    elif commits > 0:
+        score += 1; reasons.append(f"{commits} commits")
+
+    if committers > 2:
+        score += 2; reasons.append(f"{committers} contributors")
+    elif committers > 1:
+        score += 1; reasons.append(f"{committers} contributors")
+
+    if has_tests:
+        score += 2; reasons.append("has tests")
+    if has_ci:
+        score += 1; reasons.append("has CI/CD")
+    if has_app_yaml:
+        score += 1; reasons.append("has app.yaml (deployable)")
+    if has_readme:
+        score += 1; reasons.append("has README")
+    if recent_activity:
+        score += 1; reasons.append("active in last 90 days")
+    if file_count > 10:
+        score += 1; reasons.append(f"{file_count} files")
+
+    if score >= 8:
+        return ("production", "medium", reasons)
+    if score >= 5:
+        return ("validating", "medium", reasons)
+    if score >= 2:
+        return ("poc", "medium", reasons)
+    return ("idea", "low", reasons or ["minimal evidence found"])
+
 
 @dpz_router.post("/discover")
 def discover_asset(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
-    """Auto-discover asset metadata from a GitHub repo URL or workspace path.
+    """Evidence-based asset discovery from a GitHub repo URL or workspace path.
 
-    Returns pre-filled form data: name, description, type suggestion,
-    auto-tagged capabilities, README excerpt, and detected properties.
+    Returns structured evidence for every field: {value, source, confidence, reason}.
+    Includes: overlap check, maturity proposal, UC table refs, capability tagging.
+    Confidence gates behavior: high=accept, medium=review, low=blank+question.
     """
     import sqlalchemy as sa
     import re as _re
@@ -2426,50 +2557,96 @@ def discover_asset(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
 
     repo_url = body.get("repo_url", "").strip()
     workspace_path = body.get("workspace_path", "").strip()
+
+    # ── Result envelope ──
     result: dict = {
-        "name": "", "description": "", "type_suggestion": "",
-        "capabilities": [], "readme_excerpt": "",
-        "repo_url": repo_url, "workspace_path": workspace_path,
-        "properties": {}, "source": "unknown",
+        "source": "unknown",
+        "evidence": {},  # field_name -> {value, source, confidence, reason}
+        "capabilities": [],  # [{slug, source, confidence, reason}]
+        "uc_refs": [],  # [{catalog, schema, table, direction}]
+        "overlaps": [],  # [{asset_id, name, type_name, maturity, score}]
+        "maturity_proposal": {},  # {value, confidence, reasons}
+        "interview_questions": [],  # targeted questions for human-only knowledge
+        "limits": [],  # auto-drafted limitations
+        "suggested_backers": [],  # table owners who might sponsor
+        "raw": {"repo_url": repo_url, "workspace_path": workspace_path},
     }
 
+    if not repo_url and not workspace_path:
+        return {"error": "Provide repo_url or workspace_path", **result}
+
+    # Gather raw evidence
+    repo_data = {}  # GitHub API response
+    readme_text = ""
+    code_text = ""  # Combined code for analysis
+    file_list = []  # Repo file tree
+    maturity_evidence = {}
+
     if repo_url:
-        # ── GitHub discovery ──
         match = _re.match(r'https?://github\.com/([^/]+)/([^/]+)', repo_url)
         if not match:
             return {"error": "Not a recognized GitHub URL", **result}
 
-        owner, repo = match.group(1), match.group(2).rstrip('.git')
+        owner, repo_slug = match.group(1), match.group(2).rstrip('.git')
         result["source"] = "github"
-        result["properties"]["repo_url"] = repo_url
+        result["raw"]["owner"] = owner
+        result["raw"]["repo"] = repo_slug
 
-        # Fetch repo metadata via GitHub API (unauthenticated, 60 req/hr)
+        # 1) GitHub API — repo metadata
+        api_ok = False
         try:
             api_resp = _req.get(
-                f"https://api.github.com/repos/{owner}/{repo}",
+                f"https://api.github.com/repos/{owner}/{repo_slug}",
                 headers={"Accept": "application/vnd.github.v3+json"},
                 timeout=10,
             )
             if api_resp.status_code == 200:
                 repo_data = api_resp.json()
-                result["name"] = repo_data.get("name", repo).replace("-", " ").replace("_", " ").title()
-                result["description"] = repo_data.get("description") or ""
-                result["properties"]["language"] = repo_data.get("language")
-                result["properties"]["stars"] = repo_data.get("stargazers_count", 0)
-                result["properties"]["topics"] = repo_data.get("topics", [])
-                result["properties"]["default_branch"] = repo_data.get("default_branch", "main")
-                result["properties"]["updated_at"] = repo_data.get("updated_at")
-            else:
-                # Fallback: derive name from URL
-                result["name"] = repo.replace("-", " ").replace("_", " ").title()
+                api_ok = True
         except Exception:
-            result["name"] = repo.replace("-", " ").replace("_", " ").title()
+            pass
 
-        # Fetch README for description + capability tagging
-        branch = result["properties"].get("default_branch", "main")
-        readme_text = ""
-        for readme_path in (f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/README.md",
-                            f"https://raw.githubusercontent.com/{owner}/{repo}/master/README.md"):
+        # Name
+        if api_ok and repo_data.get("description"):
+            result["evidence"]["name"] = _make_evidence(
+                repo_data.get("name", repo_slug).replace("-", " ").replace("_", " ").title(),
+                f"GitHub API repo name (slug: {repo_slug})",
+                "medium",
+                "Title-cased from repo slug — likely needs a human name"
+            )
+        else:
+            result["evidence"]["name"] = _make_evidence(
+                repo_slug.replace("-", " ").replace("_", " ").title(),
+                "URL slug",
+                "low",
+                "Derived from URL slug only — please provide a proper name"
+            )
+
+        # Description
+        api_desc = repo_data.get("description", "") if api_ok else ""
+        if api_desc and len(api_desc) > 20:
+            result["evidence"]["description"] = _make_evidence(
+                api_desc, "GitHub API repo description", "medium",
+                "Repo description — may be outdated or too brief"
+            )
+
+        # 2) Fetch file tree for structural analysis
+        branch = repo_data.get("default_branch", "main") if api_ok else "main"
+        try:
+            tree_resp = _req.get(
+                f"https://api.github.com/repos/{owner}/{repo_slug}/git/trees/{branch}?recursive=1",
+                headers={"Accept": "application/vnd.github.v3+json"},
+                timeout=10,
+            )
+            if tree_resp.status_code == 200:
+                tree_data = tree_resp.json()
+                file_list = [item["path"] for item in tree_data.get("tree", []) if item.get("type") == "blob"]
+        except Exception:
+            pass
+
+        # 3) Fetch README
+        for readme_path in (f"https://raw.githubusercontent.com/{owner}/{repo_slug}/{branch}/README.md",
+                            f"https://raw.githubusercontent.com/{owner}/{repo_slug}/master/README.md"):
             try:
                 r = _req.get(readme_path, timeout=10)
                 if r.status_code == 200:
@@ -2478,66 +2655,140 @@ def discover_asset(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
             except Exception:
                 continue
 
-        if readme_text:
-            # Extract first paragraph as description if API description was empty
-            lines = [l.strip() for l in readme_text.split('\n') if l.strip() and not l.strip().startswith('#') and not l.strip().startswith('!')]
-            if not result["description"] and lines:
-                result["description"] = " ".join(lines[:3])[:500]
-            result["readme_excerpt"] = readme_text[:2000]
+        # Fill description from README if API desc was empty/short
+        if readme_text and not api_desc:
+            # Strip markdown images/links/HTML, take first real paragraph
+            clean_lines = []
+            for line in readme_text.split('\n'):
+                stripped = line.strip()
+                if not stripped:
+                    if clean_lines:
+                        break  # End of first paragraph
+                    continue
+                if stripped.startswith('#') or stripped.startswith('!') or stripped.startswith('<'):
+                    continue
+                if stripped.startswith('[') and '](' in stripped:
+                    continue  # Skip badge lines
+                clean_lines.append(stripped)
+            if clean_lines:
+                desc_text = " ".join(clean_lines)[:500]
+                result["evidence"]["description"] = _make_evidence(
+                    desc_text, f"README.md first paragraph", "medium",
+                    "Extracted from README — may contain formatting artifacts"
+                )
 
-        # Type suggestion based on repo signals
-        full_text = f"{result['name']} {result['description']} {readme_text[:1000]}".lower()
-        if any(w in full_text for w in ["app", "streamlit", "gradio", "dash", "flask", "fastapi"]):
-            result["type_suggestion"] = "application"
-        elif any(w in full_text for w in ["pipeline", "etl", "ingest", "medallion", "bronze", "silver", "gold"]):
-            result["type_suggestion"] = "pipeline"
-        elif any(w in full_text for w in ["model", "training", "inference", "agent", "llm"]):
-            result["type_suggestion"] = "model"
-        elif any(w in full_text for w in ["dashboard", "report", "analytics", "bi"]):
-            result["type_suggestion"] = "dashboard"
-        elif any(w in full_text for w in ["notebook", "analysis", "exploration"]):
-            result["type_suggestion"] = "notebook"
-        else:
-            result["type_suggestion"] = "accelerator"
+        # 4) Fetch a few key code files for UC ref extraction
+        code_files_to_check = [f for f in file_list
+                               if f.endswith(('.py', '.sql', '.scala'))
+                               and 'test' not in f.lower()
+                               and 'vendor' not in f.lower()][:8]
+        for cf in code_files_to_check:
+            try:
+                cr = _req.get(
+                    f"https://raw.githubusercontent.com/{owner}/{repo_slug}/{branch}/{cf}",
+                    timeout=8,
+                )
+                if cr.status_code == 200:
+                    code_text += f"\n# === {cf} ===\n" + cr.text[:3000]
+            except Exception:
+                continue
 
-        # Auto-tag capabilities
-        result["capabilities"] = _auto_tag_capabilities(result["name"], f"{result['description']} {readme_text[:2000]}")
+        # 5) Type detection from file structure (NOT keyword grep)
+        type_slug, type_conf, type_reason = _detect_type_from_files(file_list, readme_text)
+        result["evidence"]["type"] = _make_evidence(type_slug, "file structure analysis", type_conf, type_reason)
+
+        # 6) Extract UC table references from code
+        if code_text:
+            result["uc_refs"] = _extract_uc_refs(code_text)
+
+        # 7) Maturity evidence
+        maturity_evidence = {
+            "commit_count": repo_data.get("size", 0) // 10 if api_ok else 0,  # rough proxy
+            "committer_count": 1,  # would need commits API for real count
+            "has_readme": bool(readme_text),
+            "has_tests": any("test" in f.lower() for f in file_list),
+            "has_ci": any(f.startswith(".github/workflows") or "ci" in f.lower() for f in file_list),
+            "has_app_yaml": any("app.yaml" in f or "app.yml" in f for f in file_list),
+            "recent_activity": bool(repo_data.get("updated_at", "")),
+            "file_count": len(file_list),
+        }
+        # Try contributors count
+        if api_ok:
+            try:
+                contrib_resp = _req.get(
+                    f"https://api.github.com/repos/{owner}/{repo_slug}/contributors?per_page=5",
+                    headers={"Accept": "application/vnd.github.v3+json"},
+                    timeout=5,
+                )
+                if contrib_resp.status_code == 200:
+                    maturity_evidence["committer_count"] = len(contrib_resp.json())
+            except Exception:
+                pass
+
+        # 8) Capabilities — from code analysis, not just README keywords
+        all_text = f"{code_text}\n{readme_text[:2000]}"
+        raw_caps = _auto_tag_capabilities(
+            result["evidence"].get("name", {}).get("value", ""),
+            all_text
+        )
+        # Annotate each with source
+        for slug in raw_caps:
+            # Determine if from code or readme
+            cap_kws = _CAPABILITY_KEYWORDS.get(slug, [])
+            in_code = any(kw in code_text.lower() for kw in cap_kws) if code_text else False
+            in_readme = any(kw in readme_text.lower()[:2000] for kw in cap_kws)
+            if in_code:
+                result["capabilities"].append({
+                    "slug": slug, "source": "code analysis",
+                    "confidence": "high", "reason": f"Found in source code imports/usage"
+                })
+            elif in_readme:
+                result["capabilities"].append({
+                    "slug": slug, "source": "README keywords",
+                    "confidence": "low", "reason": f"Mentioned in README but not confirmed in code"
+                })
+
+        # Store raw data
+        result["raw"]["repo_url"] = repo_url
+        result["raw"]["file_count"] = len(file_list)
+        result["raw"]["readme_excerpt"] = readme_text[:1500]
+        result["raw"]["language"] = repo_data.get("language") if api_ok else None
+        result["raw"]["topics"] = repo_data.get("topics", []) if api_ok else []
+        result["raw"]["stars"] = repo_data.get("stargazers_count", 0) if api_ok else 0
 
     elif workspace_path:
-        # ── Workspace path discovery ──
         result["source"] = "workspace"
         try:
             from databricks.sdk import WorkspaceClient
             w = WorkspaceClient()
             obj = w.workspace.get_status(workspace_path)
             raw_name = (obj.path or workspace_path).split('/')[-1]
-            # Strip extensions
             for ext in ('.py', '.sql', '.ipynb', '.scala', '.r'):
                 if raw_name.lower().endswith(ext):
                     raw_name = raw_name[:-len(ext)]
-            result["name"] = raw_name.replace("-", " ").replace("_", " ").title()
-            result["properties"]["workspace_path"] = workspace_path
-            result["properties"]["object_type"] = str(obj.object_type) if obj.object_type else None
-            result["properties"]["language"] = str(obj.language) if obj.language else None
 
-            # Type suggestion from object type
+            result["evidence"]["name"] = _make_evidence(
+                raw_name.replace("-", " ").replace("_", " ").title(),
+                "workspace filename", "low",
+                "Derived from file/folder name — please provide a proper name"
+            )
+
             otype = str(obj.object_type).lower() if obj.object_type else ""
             if "notebook" in otype:
-                result["type_suggestion"] = "notebook"
-            elif "file" in otype:
-                result["type_suggestion"] = "accelerator"
+                result["evidence"]["type"] = _make_evidence("notebook", "workspace object type", "high", "Workspace object is a notebook")
             elif "directory" in otype:
-                result["type_suggestion"] = "accelerator"
+                result["evidence"]["type"] = _make_evidence("accelerator", "workspace directory", "low", "Directory — could be any asset type")
             else:
-                result["type_suggestion"] = "accelerator"
+                result["evidence"]["type"] = _make_evidence("accelerator", "workspace object", "low", "Could not determine type from object metadata")
 
-            # Try to read first cell/lines for description
+            # Try to read content for description + UC refs
             try:
                 content = w.workspace.export(workspace_path).content
                 if content:
                     import base64
-                    decoded = base64.b64decode(content).decode('utf-8', errors='ignore')[:2000]
-                    # Extract comments or markdown as description
+                    decoded = base64.b64decode(content).decode('utf-8', errors='ignore')[:4000]
+                    code_text = decoded
+                    # Extract description from comments/docstrings
                     desc_lines = []
                     for line in decoded.split('\n'):
                         stripped = line.strip()
@@ -2548,15 +2799,125 @@ def discover_asset(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
                         if len(desc_lines) >= 3:
                             break
                     if desc_lines:
-                        result["description"] = " ".join(desc_lines)[:500]
-                    result["readme_excerpt"] = decoded[:1000]
-                    result["capabilities"] = _auto_tag_capabilities(result["name"], decoded[:2000])
+                        result["evidence"]["description"] = _make_evidence(
+                            " ".join(desc_lines)[:500],
+                            "code comments/docstrings", "medium",
+                            "Extracted from file header comments"
+                        )
+                    result["uc_refs"] = _extract_uc_refs(decoded)
+                    raw_caps = _auto_tag_capabilities(raw_name, decoded[:2000])
+                    for slug in raw_caps:
+                        result["capabilities"].append({
+                            "slug": slug, "source": "code analysis",
+                            "confidence": "medium", "reason": "Found in notebook/file content"
+                        })
             except Exception:
                 pass
+
+            maturity_evidence = {"has_readme": False, "file_count": 1, "commit_count": 0,
+                                 "committer_count": 1, "has_tests": False, "has_ci": False,
+                                 "has_app_yaml": False, "recent_activity": True}
         except Exception as e:
-            result["description"] = f"Could not inspect path: {str(e)[:200]}"
-    else:
-        return {"error": "Provide repo_url or workspace_path", **result}
+            return {"error": f"Could not inspect path: {str(e)[:200]}", **result}
+
+    # ── Cross-cutting: maturity proposal ──
+    mat_value, mat_conf, mat_reasons = _propose_maturity(maturity_evidence)
+    result["maturity_proposal"] = {
+        "value": mat_value, "confidence": mat_conf, "reasons": mat_reasons
+    }
+
+    # ── Cross-cutting: overlap check ──
+    name_val = result["evidence"].get("name", {}).get("value", "")
+    desc_val = result["evidence"].get("description", {}).get("value", "")
+    search_text = f"{name_val} {desc_val}".strip()
+    if search_text and len(search_text) > 8:
+        try:
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            # Use the vector search similar endpoint (internal)
+            # For now, do a simple SQL search against assets
+            rows = db.execute(sa.text("""
+                SELECT a.id, a.name, t.name AS type_name, a.maturity,
+                       similarity(a.name, :q) AS score
+                FROM assets a LEFT JOIN asset_types t ON a.asset_type_id = t.id
+                WHERE a.name % :q OR a.description % :q
+                ORDER BY score DESC LIMIT 5
+            """), {"q": name_val}).fetchall()
+            result["overlaps"] = [
+                {"asset_id": str(r[0]), "name": r[1], "type_name": r[2] or "",
+                 "maturity": r[3] or "", "score": round(float(r[4] or 0), 2)}
+                for r in rows if float(r[4] or 0) > 0.2
+            ]
+        except Exception:
+            # pg_trgm not available or other error — fall back to ILIKE
+            try:
+                rows = db.execute(sa.text("""
+                    SELECT a.id, a.name, t.name AS type_name, a.maturity
+                    FROM assets a LEFT JOIN asset_types t ON a.asset_type_id = t.id
+                    WHERE LOWER(a.name) LIKE :q OR LOWER(a.description) LIKE :q
+                    LIMIT 5
+                """), {"q": f"%{name_val.lower()[:30]}%"}).fetchall()
+                result["overlaps"] = [
+                    {"asset_id": str(r[0]), "name": r[1], "type_name": r[2] or "",
+                     "maturity": r[3] or "", "score": 0.5}
+                    for r in rows
+                ]
+            except Exception:
+                pass
+
+    # ── Cross-cutting: interview questions (human-only knowledge) ──
+    questions = []
+    uc_refs = result.get("uc_refs", [])
+    if uc_refs:
+        tables_read = [f"{r['catalog']}.{r['schema']}.{r['table']}" for r in uc_refs if r['direction'] == 'read'][:3]
+        if tables_read:
+            questions.append({
+                "field": "value_hypothesis",
+                "question": f"This reads {', '.join(tables_read)}. What question were you trying to answer, and what were people doing before this existed?",
+                "why": "Only you know the problem this solves"
+            })
+    if not uc_refs:
+        questions.append({
+            "field": "value_hypothesis",
+            "question": "In one sentence, what problem does this solve that nothing else here does?",
+            "why": "Only you know the problem this solves"
+        })
+    questions.append({
+        "field": "target_audience",
+        "question": "Who would install or use this — what role, what team?",
+        "why": "Audience determines discoverability and prioritization"
+    })
+    result["interview_questions"] = questions
+
+    # ── Cross-cutting: auto-drafted limits ──
+    limits = []
+    if not maturity_evidence.get("has_tests"):
+        limits.append("No automated tests detected")
+    if maturity_evidence.get("committer_count", 0) <= 1:
+        limits.append("Single contributor — no peer review evidence")
+    if not maturity_evidence.get("has_ci"):
+        limits.append("No CI/CD pipeline detected")
+    if maturity_evidence.get("file_count", 0) < 3:
+        limits.append("Minimal codebase")
+    result["limits"] = limits
+
+    # ── Cross-cutting: suggest backers (owners of tables this reads) ──
+    if uc_refs:
+        result["suggested_backers"] = [
+            f"Owner of {r['catalog']}.{r['schema']}.{r['table']}"
+            for r in uc_refs if r["direction"] == "read"
+        ][:5]
+
+    # Auto-derive ownership from current user
+    user_email = ""
+    try:
+        user_email = current_user.get("email", "") or current_user.get("user_name", "")
+    except Exception:
+        pass
+    if user_email:
+        result["evidence"]["owner_email"] = _make_evidence(
+            user_email, "authenticated user", "high", "Your workspace identity"
+        )
 
     return result
 
