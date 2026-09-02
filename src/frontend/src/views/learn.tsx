@@ -345,10 +345,16 @@ export default function LearnView() {
               onClick={async () => {
                 setSyncing(true);
                 try {
-                  const resp = await apiPost<any>('/api/dpz/learn/sync-feeds', { max_age_days: 90, limit: 200 });
-                  if (resp.error) throw new Error(resp.error);
-                  const d = resp.data;
-                  toast({ title: 'Feed synced', description: `${d.synced} new items from Databricks feeds (${d.skipped} skipped).` });
+                  // Sync from both gold (enriched) and bronze (our crawler)
+                  const [goldResp, bronzeResp] = await Promise.all([
+                    apiPost<any>('/api/dpz/learn/sync-feeds', { source: 'gold', max_age_days: 90, limit: 200 }),
+                    apiPost<any>('/api/dpz/learn/sync-feeds', { source: 'bronze', max_age_days: 90, limit: 200 }),
+                  ]);
+                  const goldD = goldResp.error ? null : goldResp.data;
+                  const bronzeD = bronzeResp.error ? null : bronzeResp.data;
+                  const totalSynced = (goldD?.synced || 0) + (bronzeD?.synced || 0);
+                  const totalSkipped = (goldD?.skipped || 0) + (bronzeD?.skipped || 0);
+                  toast({ title: 'Feeds synced', description: `${totalSynced} new items (${totalSkipped} skipped). Gold: ${goldD?.synced || 0}, Bronze: ${bronzeD?.synced || 0}.` });
                   // Reload platform items
                   const pr = await apiGet<any>('/api/dpz/learn?channel=platform');
                   if (!pr.error && pr.data?.items) setPlatformItems(pr.data.items);

@@ -2926,22 +2926,27 @@ def discover_asset(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
 
 @dpz_router.post("/learn/sync-feeds")
 def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: CurrentUserDep):
-    """Sync Databricks content from feeds_gold.content_search_source into
-    the Learn platform channel.
+    """Sync Databricks content into the Learn platform channel.
 
-    Body: { max_age_days?: int (default 90), limit?: int (default 200) }
+    Body: {
+      source?: "gold" | "bronze" (default "gold"),
+      max_age_days?: int (default 90),
+      limit?: int (default 200)
+    }
 
-    Reads real enriched content from the feeds pipeline (Databricks blog,
-    release notes, YouTube, training, GitHub) and inserts into learn_content
-    with channel='platform'. Deduplicates on title.
+    source="gold": reads from feeds_gold.content_search_source (enriched pipeline)
+    source="bronze": reads from dpz_feeds_bronze.content_raw (our crawler)
+
+    Deduplicates on title.
     """
     import sqlalchemy as sa
     from databricks.sdk import WorkspaceClient
 
+    feed_source = body.get("source", "gold")
     max_age_days = body.get("max_age_days", 90)
     limit = min(body.get("limit", 200), 500)
 
-    # Query feeds gold via SQL warehouse
+    # Query feeds via SQL warehouse
     w = WorkspaceClient()
     warehouse_id = None
     for r in (getattr(w.config, '_resources', None) or []):
@@ -2952,18 +2957,40 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
         import os
         warehouse_id = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4047b28d66a51bdc")
 
-    query = f"""
-    SELECT
-        item_id, title, COALESCE(enriched_summary, summary) AS summary,
-        url, published_at, source_name, content_type,
-        product_area, impact_level, topics,
-        image_url, action_summary
-    FROM serverless_stable_h7wanf_catalog.feeds_gold.content_search_source
-    WHERE published_at >= current_date() - INTERVAL {max_age_days} DAYS
-      AND title IS NOT NULL AND title != ''
-    ORDER BY published_at DESC
-    LIMIT {limit}
-    """
+    if feed_source == "bronze":
+        # Read from our own crawler's bronze table
+        query = f"""
+        SELECT
+            item_id,
+            COALESCE(canonical_title, rss_title) AS title,
+            COALESCE(raw_text, rss_description) AS summary,
+            COALESCE(canonical_url, rss_link) AS url,
+            COALESCE(rss_pub_date, ingested_at) AS published_at,
+            source_name, source_type AS content_type,
+            NULL AS product_area, NULL AS impact_level,
+            rss_categories AS topics,
+            image_url, NULL AS action_summary
+        FROM serverless_stable_h7wanf_catalog.dpz_feeds_bronze.content_raw
+        WHERE COALESCE(rss_pub_date, ingested_at) >= current_date() - INTERVAL {max_age_days} DAYS
+          AND COALESCE(canonical_title, rss_title) IS NOT NULL
+          AND COALESCE(canonical_title, rss_title) != ''
+        ORDER BY COALESCE(rss_pub_date, ingested_at) DESC
+        LIMIT {limit}
+        """
+    else:
+        # Read from the enriched feeds_gold pipeline (default)
+        query = f"""
+        SELECT
+            item_id, title, COALESCE(enriched_summary, summary) AS summary,
+            url, published_at, source_name, content_type,
+            product_area, impact_level, topics,
+            image_url, action_summary
+        FROM serverless_stable_h7wanf_catalog.feeds_gold.content_search_source
+        WHERE published_at >= current_date() - INTERVAL {max_age_days} DAYS
+          AND title IS NOT NULL AND title != ''
+        ORDER BY published_at DESC
+        LIMIT {limit}
+        """
 
     try:
         from databricks.sdk.service.sql import StatementState
