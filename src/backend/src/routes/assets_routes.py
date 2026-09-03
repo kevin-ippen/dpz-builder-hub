@@ -2946,6 +2946,14 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
     max_age_days = body.get("max_age_days", 90)
     limit = min(body.get("limit", 200), 500)
 
+    # Configurable table locations — override via env vars:
+    #   DPZ_FEEDS_CATALOG, DPZ_FEEDS_GOLD_SCHEMA, DPZ_FEEDS_GOLD_TABLE,
+    #   DPZ_FEEDS_BRONZE_SCHEMA, DPZ_FEEDS_BRONZE_TABLE
+    import os
+    _cat = os.environ.get("DPZ_FEEDS_CATALOG", "serverless_stable_h7wanf_catalog")
+    _gold_fqn = f"{_cat}.{os.environ.get('DPZ_FEEDS_GOLD_SCHEMA', 'feeds_gold')}.{os.environ.get('DPZ_FEEDS_GOLD_TABLE', 'content_search_source')}"
+    _bronze_fqn = f"{_cat}.{os.environ.get('DPZ_FEEDS_BRONZE_SCHEMA', 'feeds_bronze')}.{os.environ.get('DPZ_FEEDS_BRONZE_TABLE', 'content_raw')}"
+
     # Query feeds via SQL warehouse
     w = WorkspaceClient()
     warehouse_id = None
@@ -2954,11 +2962,10 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
             warehouse_id = r.sql_warehouse.id
             break
     if not warehouse_id:
-        import os
         warehouse_id = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4047b28d66a51bdc")
 
     if feed_source == "bronze":
-        # Read from our own crawler's bronze table
+        # Read from crawler's bronze table
         query = f"""
         SELECT
             item_id,
@@ -2970,7 +2977,7 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
             NULL AS product_area, NULL AS impact_level,
             rss_categories AS topics,
             image_url, NULL AS action_summary
-        FROM serverless_stable_h7wanf_catalog.dpz_feeds_bronze.content_raw
+        FROM {_bronze_fqn}
         WHERE COALESCE(rss_pub_date, ingested_at) >= current_date() - INTERVAL {max_age_days} DAYS
           AND COALESCE(canonical_title, rss_title) IS NOT NULL
           AND COALESCE(canonical_title, rss_title) != ''
@@ -2978,14 +2985,14 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
         LIMIT {limit}
         """
     else:
-        # Read from the enriched feeds_gold pipeline (default)
+        # Read from enriched gold pipeline (default)
         query = f"""
         SELECT
             item_id, title, COALESCE(enriched_summary, summary) AS summary,
             url, published_at, source_name, content_type,
             product_area, impact_level, topics,
             image_url, action_summary
-        FROM serverless_stable_h7wanf_catalog.feeds_gold.content_search_source
+        FROM {_gold_fqn}
         WHERE published_at >= current_date() - INTERVAL {max_age_days} DAYS
           AND title IS NOT NULL AND title != ''
         ORDER BY published_at DESC

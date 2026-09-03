@@ -6,6 +6,10 @@ import {
   Blocks, Building2, Database, ExternalLink, Shield,
   TrendingUp, CheckCircle2, X, Clock, Link2,
   AlertTriangle, Activity, ThumbsUp, Zap,
+  Bot, Plug, MessageCircle, FileCode, Package,
+  LayoutDashboard, GitBranch, BookOpen, Copy,
+  Lightbulb, FlaskConical, Users, Award, Play,
+  Server, Table2, Cpu, Terminal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -97,6 +101,256 @@ function PropertiesCard({ properties }: { properties?: Record<string, any> | nul
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/* ─── Type-specific context card ─── */
+const TYPE_ICON: Record<string, any> = {
+  Agent: Bot, 'MCP Server': Plug, 'Genie Space': MessageCircle,
+  Pipeline: Server, Stream: Server, Notebook: FileCode,
+  Library: Package, Dashboard: LayoutDashboard, Repository: GitBranch,
+  Cookbook: BookOpen, Template: Copy, App: Play, 'ML Model': Cpu,
+  Table: Table2, Dataset: Database, Skill: Terminal,
+};
+
+const TYPE_FIELDS: Record<string, { key: string; label: string; mono?: boolean }[]> = {
+  Agent: [
+    { key: 'target_model', label: 'Model' },
+    { key: 'tools_needed', label: 'Tools' },
+    { key: 'endpoint_name', label: 'Endpoint' },
+    { key: 'framework', label: 'Framework' },
+  ],
+  'MCP Server': [
+    { key: 'tools_exposed', label: 'Tools exposed' },
+    { key: 'protocol_version', label: 'Protocol' },
+    { key: 'transport', label: 'Transport' },
+    { key: 'connected_agents', label: 'Connected agents' },
+  ],
+  'Genie Space': [
+    { key: 'genie_space_id', label: 'Space ID', mono: true },
+    { key: 'tables', label: 'Tables' },
+    { key: 'certified_queries', label: 'Certified queries' },
+    { key: 'avg_questions_per_week', label: 'Avg questions/week' },
+  ],
+  Stream: [
+    { key: 'schedule', label: 'Schedule' },
+    { key: 'tables_written', label: 'Tables written' },
+    { key: 'avg_runtime_min', label: 'Avg runtime' },
+    { key: 'source', label: 'Source', mono: true },
+    { key: 'dlt_pipeline_id', label: 'Pipeline ID', mono: true },
+  ],
+  Notebook: [
+    { key: 'notebook_id', label: 'Notebook ID', mono: true },
+    { key: 'language', label: 'Language' },
+    { key: 'runtime', label: 'Runtime' },
+    { key: 'parameters', label: 'Parameters' },
+    { key: 'parameterized', label: 'Parameterized' },
+  ],
+  Library: [
+    { key: 'package_name', label: 'Package', mono: true },
+    { key: 'latest_version', label: 'Version' },
+    { key: 'install', label: 'Install', mono: true },
+    { key: 'python_requires', label: 'Python' },
+    { key: 'downloads_last_30d', label: 'Downloads (30d)' },
+  ],
+  Dashboard: [
+    { key: 'visualization_type', label: 'Type' },
+    { key: 'refresh_interval_sec', label: 'Refresh (sec)' },
+    { key: 'data_sources', label: 'Sources' },
+  ],
+  Template: [
+    { key: 'template_engine', label: 'Engine' },
+    { key: 'languages', label: 'Languages' },
+    { key: 'includes', label: 'Files included' },
+    { key: 'times_used', label: 'Times used' },
+  ],
+  'ML Model': [
+    { key: 'model_name', label: 'Model name', mono: true },
+    { key: 'endpoint_name', label: 'Endpoint', mono: true },
+    { key: 'framework', label: 'Framework' },
+    { key: 'metrics', label: 'Metrics' },
+  ],
+  App: [
+    { key: 'app_url', label: 'URL' },
+    { key: 'framework', label: 'Framework' },
+    { key: 'active_users', label: 'Active users' },
+  ],
+};
+
+function TypeContextCard({ typeName, properties }: { typeName: string; properties?: Record<string, any> | null }) {
+  const fields = TYPE_FIELDS[typeName];
+  if (!fields || !properties) return null;
+  const populated = fields.filter(f => {
+    const v = properties[f.key];
+    return v !== null && v !== undefined && v !== '';
+  });
+  if (populated.length === 0) return null;
+
+  const Icon = TYPE_ICON[typeName] || Blocks;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+          <Icon className="h-3 w-3" /> {typeName} Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {populated.map(f => {
+            const val = properties[f.key];
+            const display = Array.isArray(val) ? val.join(', ') : String(val);
+            return (
+              <div key={f.key}>
+                <Label className="text-xs text-muted-foreground">{f.label}</Label>
+                <p className={`text-sm mt-1 ${f.mono ? 'font-mono' : ''} truncate`} title={display}>{display}</p>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Maturity-specific context card ─── */
+const MATURITY_CONFIG: Record<string, {
+  icon: any; color: string; bgClass: string;
+  headline: string; description: string;
+  showHypothesis?: boolean; showBackerCta?: boolean;
+  showExperimentFields?: boolean; showAdoptionMetrics?: boolean;
+  showSlaFields?: boolean; showCertBadge?: boolean;
+}> = {
+  idea: {
+    icon: Lightbulb, color: 'text-amber-600 dark:text-amber-400',
+    bgClass: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800',
+    headline: 'Idea Stage',
+    description: 'This is a proposal looking for validation and backers. No code or infrastructure exists yet.',
+    showHypothesis: true, showBackerCta: true,
+  },
+  poc: {
+    icon: FlaskConical, color: 'text-blue-600 dark:text-blue-400',
+    bgClass: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800',
+    headline: 'Proof of Concept',
+    description: 'Active experiment. Code exists but is not production-hardened. Expect rough edges and breaking changes.',
+    showHypothesis: true, showExperimentFields: true,
+  },
+  validating: {
+    icon: Users, color: 'text-purple-600 dark:text-purple-400',
+    bgClass: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800',
+    headline: 'Validating',
+    description: 'Being tested with real users. Gathering adoption metrics and feedback before production promotion.',
+    showAdoptionMetrics: true,
+  },
+  production: {
+    icon: CheckCircle2, color: 'text-green-600 dark:text-green-400',
+    bgClass: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800',
+    headline: 'Production',
+    description: 'Actively maintained and relied upon. Has an owner, SLA expectations, and operational monitoring.',
+    showSlaFields: true,
+  },
+  certified: {
+    icon: Award, color: 'text-emerald-600 dark:text-emerald-400',
+    bgClass: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800',
+    headline: 'Certified',
+    description: 'Passed formal review. Approved for broad organizational use with compliance guarantees.',
+    showSlaFields: true, showCertBadge: true,
+  },
+};
+
+function MaturityContextCard({ maturity, asset, governance }: {
+  maturity: string;
+  asset: AssetRead & Record<string, any>;
+  governance: Record<string, any>;
+}) {
+  const cfg = MATURITY_CONFIG[maturity];
+  if (!cfg) return null;
+  const Icon = cfg.icon;
+  return (
+    <div className={`rounded-xl border p-4 space-y-3 ${cfg.bgClass}`}>
+      <div className="flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${cfg.color}`} />
+        <span className={`text-sm font-semibold ${cfg.color}`}>{cfg.headline}</span>
+      </div>
+      <p className="text-xs text-muted-foreground">{cfg.description}</p>
+
+      {/* Idea: hypothesis callout + backer CTA */}
+      {cfg.showHypothesis && asset.value_hypothesis && (
+        <div className="rounded-lg bg-background/80 border p-3 mt-2">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Value Hypothesis</div>
+          <p className="text-sm italic">"{asset.value_hypothesis}"</p>
+        </div>
+      )}
+      {cfg.showBackerCta && (
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed">
+          <ThumbsUp className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Think this is worth building?</span>
+          <Badge variant="outline" className="text-[10px] cursor-pointer hover:bg-primary/10">Back this idea</Badge>
+        </div>
+      )}
+
+      {/* POC: experiment metadata */}
+      {cfg.showExperimentFields && (
+        <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-dashed">
+          <div className="text-center">
+            <div className="text-xs font-bold">{asset.delivery_status || 'funded'}</div>
+            <div className="text-[9px] text-muted-foreground">Delivery</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs font-bold">{asset.repo_url ? '✓ Repo' : '✗ No repo'}</div>
+            <div className="text-[9px] text-muted-foreground">Code</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs font-bold">{asset.operational_health || 'unknown'}</div>
+            <div className="text-[9px] text-muted-foreground">Health</div>
+          </div>
+        </div>
+      )}
+
+      {/* Validating: adoption metrics */}
+      {cfg.showAdoptionMetrics && (
+        <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-dashed">
+          <div className="text-center">
+            <div className="text-lg font-bold">{asset.install_count ?? 0}</div>
+            <div className="text-[9px] text-muted-foreground">Adopters</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-bold">{asset.delivery_status === 'in_delivery' ? 'In progress' : asset.delivery_status}</div>
+            <div className="text-[9px] text-muted-foreground">Delivery</div>
+          </div>
+        </div>
+      )}
+
+      {/* Production/Certified: SLA + operational */}
+      {cfg.showSlaFields && (
+        <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-dashed">
+          <div className="text-center">
+            <div className={`text-xs font-bold ${asset.operational_health === 'healthy' ? 'text-green-600' : asset.operational_health === 'degraded' ? 'text-amber-600' : ''}`}>
+              {asset.operational_health || 'unknown'}
+            </div>
+            <div className="text-[9px] text-muted-foreground">Health</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs font-bold">{governance?.sla_tier || 'none'}</div>
+            <div className="text-[9px] text-muted-foreground">SLA</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs font-bold">{asset.install_count ?? 0}</div>
+            <div className="text-[9px] text-muted-foreground">Adopters</div>
+          </div>
+        </div>
+      )}
+
+      {/* Certified: seal */}
+      {cfg.showCertBadge && asset.certified_at && (
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed">
+          <Award className="h-4 w-4 text-emerald-600" />
+          <span className="text-xs">Certified by <strong>{asset.certified_by}</strong></span>
+          {asset.certification_expires_at && (
+            <Badge variant="outline" className="text-[9px] ml-auto">Expires: {new Date(asset.certification_expires_at).toLocaleDateString()}</Badge>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -397,7 +651,13 @@ export default function AssetDetailView() {
             </CardContent>
           </Card>
 
-          {/* Properties */}
+          {/* Maturity-specific context */}
+          <MaturityContextCard maturity={(asset as any).maturity} asset={asset as any} governance={governance} />
+
+          {/* Type-specific context */}
+          <TypeContextCard typeName={entityType} properties={asset.properties as any} />
+
+          {/* Properties (raw fallback for anything not covered above) */}
           <PropertiesCard properties={asset.properties} />
 
         </TabsContent>

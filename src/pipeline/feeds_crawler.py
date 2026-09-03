@@ -30,34 +30,20 @@ from typing import Optional
 
 logger = logging.getLogger("feeds_crawler")
 
-# ─── Feed registry ────────────────────────────────────────────────────
+# ─── Config (import from config.py or use env vars) ──────────────────
 
-FEED_SOURCES = [
-    {
-        "name": "Databricks Blog",
-        "url": "https://www.databricks.com/en-blog-assets/sitemap/sitemap-0.xml",
-        "source_type": "blog",
-        "parser": "sitemap",  # XML sitemap, not RSS
-    },
-    {
-        "name": "Azure DB Release Notes",
-        "url": "https://learn.microsoft.com/en-us/azure/databricks/feed.xml",
-        "source_type": "release_notes",
-        "parser": "atom",
-    },
-    {
-        "name": "Databricks YouTube",
-        "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC3q8O3Bh2Le8Rj1-Q-_UUbA",
-        "source_type": "video",
-        "parser": "atom",
-    },
-]
+try:
+    from pipeline.config import CATALOG, BRONZE_SCHEMA, BRONZE_TABLE, FEED_SOURCES
+except ImportError:
+    try:
+        from config import CATALOG, BRONZE_SCHEMA, BRONZE_TABLE, FEED_SOURCES
+    except ImportError:
+        import os
+        CATALOG = os.getenv("DPZ_FEEDS_CATALOG", "serverless_stable_h7wanf_catalog")
+        BRONZE_SCHEMA = os.getenv("DPZ_FEEDS_BRONZE_SCHEMA", "feeds_bronze")
+        BRONZE_TABLE = os.getenv("DPZ_FEEDS_BRONZE_TABLE", "content_raw")
+        FEED_SOURCES = []
 
-# ─── Defaults ─────────────────────────────────────────────────────────
-
-DEFAULT_CATALOG = "serverless_stable_h7wanf_catalog"
-DEFAULT_SCHEMA = "dpz_feeds_bronze"
-DEFAULT_TABLE = "content_raw"
 DEFAULT_MAX_ITEMS = 200  # per source, per run
 FETCH_TIMEOUT = 15
 
@@ -223,9 +209,9 @@ def _fetch_page(url: str) -> tuple[Optional[str], Optional[str], Optional[str], 
 
 def run_crawl(
     spark,
-    catalog: str = DEFAULT_CATALOG,
-    schema: str = DEFAULT_SCHEMA,
-    table: str = DEFAULT_TABLE,
+    catalog: str = CATALOG,
+    schema: str = BRONZE_SCHEMA,
+    table: str = BRONZE_TABLE,
     max_items: int = DEFAULT_MAX_ITEMS,
     fetch_pages: bool = True,
     fetch_limit: int = 50,
