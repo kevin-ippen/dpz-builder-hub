@@ -9,7 +9,8 @@ import {
   Bot, Plug, MessageCircle, FileCode, Package,
   LayoutDashboard, GitBranch, BookOpen, Copy,
   Lightbulb, FlaskConical, Users, Award, Play,
-  Server, Table2, Cpu, Terminal,
+  Server, Table2, Cpu, Terminal, ChevronRight,
+  Hand, Beaker, Eye, Rocket, Check, Circle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -212,145 +213,260 @@ function TypeContextCard({ typeName, properties }: { typeName: string; propertie
   );
 }
 
-/* ─── Maturity-specific context card ─── */
-const MATURITY_CONFIG: Record<string, {
-  icon: any; color: string; bgClass: string;
-  headline: string; description: string;
-  showHypothesis?: boolean; showBackerCta?: boolean;
-  showExperimentFields?: boolean; showAdoptionMetrics?: boolean;
-  showSlaFields?: boolean; showCertBadge?: boolean;
+/* ─── Lifecycle rail (horizontal stepper) ─── */
+const LIFECYCLE_STEPS = [
+  { id: 'idea', label: 'Idea', gate: 'triaged →' },
+  { id: 'poc', label: 'Prototype', gate: 'validated →' },
+  { id: 'validating', label: 'Validating', gate: 'promoted →' },
+  { id: 'production', label: 'Production', gate: '' },
+];
+
+function LifecycleRail({ maturity }: { maturity: string }) {
+  const currentIdx = LIFECYCLE_STEPS.findIndex(s => s.id === maturity);
+  return (
+    <div className="rounded-xl border bg-card p-3">
+      <div className="text-[10px] font-mono uppercase tracking-[0.1em] text-muted-foreground mb-2.5">Lifecycle</div>
+      <div className="flex gap-0">
+        {LIFECYCLE_STEPS.map((step, i) => {
+          const done = i < currentIdx;
+          const now = i === currentIdx;
+          return (
+            <div key={step.id} className="flex-1 min-w-0">
+              <div className={`h-1 rounded-full mb-1.5 ${i > 0 ? 'ml-1' : ''} ${
+                now ? 'bg-primary' : done ? 'bg-muted-foreground/30' : 'bg-muted/60'
+              }`} />
+              <div className={`text-xs ${i > 0 ? 'pl-1' : ''} ${
+                now ? 'font-semibold text-foreground' : 'text-muted-foreground'
+              }`}>{step.label}</div>
+              {step.gate && (
+                <div className="text-[10px] font-mono text-muted-foreground/50 mt-0.5">{step.gate}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Contract band (the trust-setting component) ─── */
+const CONTRACT_DATA: Record<string, {
+  headline: string;
+  borderClass: string; headBg: string; headText: string;
+  get: string[]; dont: string[];
+  terms: string;
 }> = {
   idea: {
-    icon: Lightbulb, color: 'text-amber-600 dark:text-amber-400',
-    bgClass: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800',
-    headline: 'Idea Stage',
-    description: 'This is a proposal looking for validation and backers. No code or infrastructure exists yet.',
-    showHypothesis: true, showBackerCta: true,
+    headline: 'This is an idea. No code exists.',
+    borderClass: 'border-amber-200 dark:border-amber-800',
+    headBg: 'bg-amber-50 dark:bg-amber-950/40',
+    headText: 'text-amber-800 dark:text-amber-300',
+    terms: 'IDEA TERMS',
+    get: [
+      'Read the description and understand the concept.',
+      'Back it \u2014 backing decides what gets triaged first.',
+      'Comment with the use case that makes it yours too.',
+    ],
+    dont: [
+      'Nothing to run, install, or call.',
+      'No owner has committed to build it.',
+      'May be merged into a similar initiative.',
+    ],
   },
   poc: {
-    icon: FlaskConical, color: 'text-blue-600 dark:text-blue-400',
-    bgClass: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800',
-    headline: 'Proof of Concept',
-    description: 'Active experiment. Code exists but is not production-hardened. Expect rough edges and breaking changes.',
-    showHypothesis: true, showExperimentFields: true,
+    headline: 'Code exists. Nothing is promised.',
+    borderClass: 'border-border',
+    headBg: 'bg-muted/50',
+    headText: 'text-foreground',
+    terms: 'PROTOTYPE TERMS',
+    get: [
+      'Read the code and run it in your own sandbox.',
+      "The author's own list of limits, signed below.",
+      'A maintainer who answers best-effort.',
+    ],
+    dont: [
+      'No eval, no SLA, no on-call \u2014 it can break silently.',
+      'May read production data \u2014 check your own grants first.',
+      'No commitment to keep the interface stable.',
+    ],
   },
   validating: {
-    icon: Users, color: 'text-purple-600 dark:text-purple-400',
-    bgClass: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800',
-    headline: 'Validating',
-    description: 'Being tested with real users. Gathering adoption metrics and feedback before production promotion.',
-    showAdoptionMetrics: true,
+    headline: 'In validation. Being tested against a real decision.',
+    borderClass: 'border-blue-200 dark:border-blue-800',
+    headBg: 'bg-blue-50 dark:bg-blue-950/40',
+    headText: 'text-blue-800 dark:text-blue-300',
+    terms: 'PILOT TERMS',
+    get: [
+      'A frozen interface for the length of the pilot.',
+      'Eval results republished on every change.',
+      'Two maintainers and a two-day response target.',
+    ],
+    dont: [
+      'Not supported outside the pilot teams.',
+      'Numbers are for review, not for the board deck.',
+      'Can still be withdrawn if the pilot fails.',
+    ],
   },
   production: {
-    icon: CheckCircle2, color: 'text-green-600 dark:text-green-400',
-    bgClass: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800',
-    headline: 'Production',
-    description: 'Actively maintained and relied upon. Has an owner, SLA expectations, and operational monitoring.',
-    showSlaFields: true,
+    headline: 'Supported. On-call, with SLA.',
+    borderClass: 'border-green-200 dark:border-green-800',
+    headBg: 'bg-green-50 dark:bg-green-950/40',
+    headText: 'text-green-800 dark:text-green-300',
+    terms: 'SERVICE TERMS',
+    get: [
+      'Response within one business day.',
+      '90 days\u2019 notice on any breaking change.',
+      'Eval published on every release; adopters alerted on regression.',
+    ],
+    dont: [
+      'Deprecation still possible with two quarters\u2019 notice.',
+      'Cost may be charged back above threshold.',
+      'Not tier-1 unless explicitly upgraded.',
+    ],
   },
   certified: {
-    icon: Award, color: 'text-emerald-600 dark:text-emerald-400',
-    bgClass: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800',
-    headline: 'Certified',
-    description: 'Passed formal review. Approved for broad organizational use with compliance guarantees.',
-    showSlaFields: true, showCertBadge: true,
+    headline: 'Certified. Approved for broad organizational use.',
+    borderClass: 'border-emerald-200 dark:border-emerald-800',
+    headBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    headText: 'text-emerald-800 dark:text-emerald-300',
+    terms: 'CERTIFIED TERMS',
+    get: [
+      'Passed formal review with compliance guarantees.',
+      'Full audit trail and certification seal.',
+      'Covered by organizational SLA and support.',
+    ],
+    dont: [
+      'Recertification required on schedule.',
+      'Changes go through formal change management.',
+      'Deprecation requires successor to be named first.',
+    ],
   },
 };
 
-function MaturityContextCard({ maturity, asset, governance }: {
-  maturity: string;
-  asset: AssetRead & Record<string, any>;
-  governance: Record<string, any>;
-}) {
-  const cfg = MATURITY_CONFIG[maturity];
-  if (!cfg) return null;
-  const Icon = cfg.icon;
+function ContractBand({ maturity, asset }: { maturity: string; asset: Record<string, any> }) {
+  const data = CONTRACT_DATA[maturity];
+  if (!data) return null;
   return (
-    <div className={`rounded-xl border p-4 space-y-3 ${cfg.bgClass}`}>
-      <div className="flex items-center gap-2">
-        <Icon className={`h-4 w-4 ${cfg.color}`} />
-        <span className={`text-sm font-semibold ${cfg.color}`}>{cfg.headline}</span>
+    <div className={`rounded-xl border overflow-hidden ${data.borderClass}`}>
+      <div className={`flex items-baseline justify-between px-4 py-3 border-b ${data.borderClass} ${data.headBg}`}>
+        <span className={`text-sm font-semibold ${data.headText}`}>{data.headline}</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{data.terms}</span>
       </div>
-      <p className="text-xs text-muted-foreground">{cfg.description}</p>
-
-      {/* Idea: hypothesis callout + backer CTA */}
-      {cfg.showHypothesis && asset.value_hypothesis && (
-        <div className="rounded-lg bg-background/80 border p-3 mt-2">
-          <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Value Hypothesis</div>
-          <p className="text-sm italic">"{asset.value_hypothesis}"</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 bg-card">
+        <div className="p-4">
+          <div className="text-[10px] font-mono uppercase tracking-[0.08em] text-muted-foreground mb-2">WHAT YOU GET</div>
+          <ul className="space-y-1.5">
+            {data.get.map((item, i) => (
+              <li key={i} className="flex gap-2 text-[13px] text-muted-foreground">
+                <span className="text-muted-foreground/50 font-mono shrink-0">✓</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-      )}
-      {cfg.showBackerCta && (
-        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed">
-          <ThumbsUp className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Think this is worth building?</span>
-          <Badge variant="outline" className="text-[10px] cursor-pointer hover:bg-primary/10">Back this idea</Badge>
+        <div className={`p-4 border-t sm:border-t-0 sm:border-l ${data.borderClass}`}>
+          <div className="text-[10px] font-mono uppercase tracking-[0.08em] text-muted-foreground mb-2">DON'T EXPECT</div>
+          <ul className="space-y-1.5">
+            {data.dont.map((item, i) => (
+              <li key={i} className="flex gap-2 text-[13px] text-muted-foreground">
+                <span className="text-muted-foreground/50 font-mono shrink-0">×</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-      )}
-
-      {/* POC: experiment metadata */}
-      {cfg.showExperimentFields && (
-        <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-dashed">
-          <div className="text-center">
-            <div className="text-xs font-bold">{asset.delivery_status || 'funded'}</div>
-            <div className="text-[9px] text-muted-foreground">Delivery</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs font-bold">{asset.repo_url ? '✓ Repo' : '✗ No repo'}</div>
-            <div className="text-[9px] text-muted-foreground">Code</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs font-bold">{asset.operational_health || 'unknown'}</div>
-            <div className="text-[9px] text-muted-foreground">Health</div>
-          </div>
-        </div>
-      )}
-
-      {/* Validating: adoption metrics */}
-      {cfg.showAdoptionMetrics && (
-        <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-dashed">
-          <div className="text-center">
-            <div className="text-lg font-bold">{asset.install_count ?? 0}</div>
-            <div className="text-[9px] text-muted-foreground">Adopters</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-bold">{asset.delivery_status === 'in_delivery' ? 'In progress' : asset.delivery_status}</div>
-            <div className="text-[9px] text-muted-foreground">Delivery</div>
-          </div>
-        </div>
-      )}
-
-      {/* Production/Certified: SLA + operational */}
-      {cfg.showSlaFields && (
-        <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-dashed">
-          <div className="text-center">
-            <div className={`text-xs font-bold ${asset.operational_health === 'healthy' ? 'text-green-600' : asset.operational_health === 'degraded' ? 'text-amber-600' : ''}`}>
-              {asset.operational_health || 'unknown'}
-            </div>
-            <div className="text-[9px] text-muted-foreground">Health</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs font-bold">{governance?.sla_tier || 'none'}</div>
-            <div className="text-[9px] text-muted-foreground">SLA</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs font-bold">{asset.install_count ?? 0}</div>
-            <div className="text-[9px] text-muted-foreground">Adopters</div>
-          </div>
-        </div>
-      )}
-
-      {/* Certified: seal */}
-      {cfg.showCertBadge && asset.certified_at && (
-        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed">
-          <Award className="h-4 w-4 text-emerald-600" />
-          <span className="text-xs">Certified by <strong>{asset.certified_by}</strong></span>
-          {asset.certification_expires_at && (
-            <Badge variant="outline" className="text-[9px] ml-auto">Expires: {new Date(asset.certification_expires_at).toLocaleDateString()}</Badge>
-          )}
+      </div>
+      {/* Hypothesis callout for idea/poc */}
+      {(maturity === 'idea' || maturity === 'poc') && asset.value_hypothesis && (
+        <div className={`px-4 py-3 border-t ${data.borderClass} bg-card`}>
+          <div className="text-[10px] font-mono uppercase tracking-[0.08em] text-muted-foreground mb-1">VALUE HYPOTHESIS</div>
+          <p className="text-sm italic text-muted-foreground">\"{asset.value_hypothesis}\"</p>
         </div>
       )}
     </div>
+  );
+}
+
+/* ─── Stage-appropriate action buttons ─── */
+const STAGE_ACTIONS: Record<string, { primary: string; secondary: string; note: string }> = {
+  idea: { primary: 'Back this idea', secondary: 'Claim as owner', note: 'Backing closes the moment this gets funded. Votes freeze as the record of who asked.' },
+  poc: { primary: 'Run in my sandbox', secondary: 'Join as maintainer', note: 'One maintainer is a single point of failure. A second moves this to community-supported.' },
+  validating: { primary: 'Pilot with my team', secondary: 'Read eval report', note: 'Pilot slots are capped so maintainers can hold the response target.' },
+  production: { primary: 'Adopt this asset', secondary: 'Request promotion', note: 'Adopting registers your team as a dependency \u2014 you get breaking-change notice and regression alerts.' },
+  certified: { primary: 'Adopt this asset', secondary: 'View audit trail', note: 'Certified assets have full organizational support and compliance guarantees.' },
+};
+
+/* ─── Gate checklist for evidence tab ─── */
+const GATE_CHECKLISTS: Record<string, { title: string; items: { text: string; done: boolean; blocker?: string }[] }> = {
+  idea: {
+    title: 'What triage needs',
+    items: [
+      { text: 'A problem statement in the poster\'s own words', done: true },
+      { text: 'A named audience', done: true },
+      { text: 'Three or more backers', done: true },
+      { text: 'An owner willing to spend a week on it', done: false },
+      { text: 'Overlap with existing assets resolved', done: false },
+    ],
+  },
+  poc: {
+    title: 'What validation needs',
+    items: [
+      { text: 'Runnable from a clean sandbox', done: true },
+      { text: 'Signed limits statement', done: false },
+      { text: 'A second maintainer', done: false },
+      { text: 'An eval suite with a stated pass bar', done: false },
+      { text: 'One team willing to pilot against a real decision', done: false },
+      { text: 'Interface frozen for the pilot window', done: false },
+    ],
+  },
+  validating: {
+    title: 'Promotion gates',
+    items: [
+      { text: 'Eval pass rate above 85% for two weeks', done: true },
+      { text: 'Two pilot teams reporting', done: true },
+      { text: 'Two maintainers named', done: true },
+      { text: 'Cost under ceiling', done: true },
+      { text: 'Confidence calibrated against manual reviews', done: false, blocker: 'Blocked on pilot volume' },
+      { text: 'On-call rotation staffed', done: false, blocker: 'Blocked on staffing review' },
+      { text: 'Known data gaps resolved or documented', done: false },
+    ],
+  },
+};
+
+function GateChecklist({ maturity }: { maturity: string }) {
+  const gates = GATE_CHECKLISTS[maturity];
+  if (!gates) return null;
+  const done = gates.items.filter(i => i.done).length;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">
+            {gates.title}
+          </CardTitle>
+          <span className="text-[11px] font-mono text-muted-foreground">{done} of {gates.items.length}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {gates.items.map((item, i) => (
+          <div key={i} className="flex gap-2.5 items-start">
+            <div className={`mt-0.5 h-4 w-4 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-mono ${
+              item.done
+                ? 'bg-green-600 text-white'
+                : 'border border-muted-foreground/30'
+            }`}>
+              {item.done && <Check className="h-2.5 w-2.5" />}
+            </div>
+            <div className="min-w-0">
+              <div className={`text-[13px] ${item.done ? 'text-foreground' : 'text-muted-foreground'}`}>{item.text}</div>
+              {item.blocker && (
+                <div className="text-[11px] text-muted-foreground/70 mt-0.5">{item.blocker}</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -491,41 +607,24 @@ export default function AssetDetailView() {
         {asset.description && (
           <p className="text-sm text-muted-foreground mt-2 max-w-2xl">{asset.description}</p>
         )}
-        {/* DPZ Lifecycle Badges */}
-        {(asset as any).maturity && (
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {(asset as any).maturity && (
-              <Badge variant="default" className="text-xs bg-blue-600">
-                {(asset as any).maturity}
-              </Badge>
-            )}
-            {(asset as any).publication_scope && (asset as any).publication_scope !== 'draft' && (
-              <Badge variant="secondary" className="text-xs">
-                {(asset as any).publication_scope}
-              </Badge>
-            )}
-            {(asset as any).operational_health && (asset as any).operational_health !== 'unknown' && (
-              <Badge variant={(asset as any).operational_health === 'healthy' ? 'default' : 'destructive'}
-                className={`text-xs ${(asset as any).operational_health === 'healthy' ? 'bg-green-600' : ''}`}>
-                {(asset as any).operational_health}
-              </Badge>
-            )}
-            {(asset as any).delivery_status && (asset as any).delivery_status !== 'unfunded' && (
-              <Badge variant="outline" className="text-xs">
-                {(asset as any).delivery_status}
-              </Badge>
-            )}
-            {staleness && staleness.label !== 'active' && (
-              <Badge
-                variant="outline"
-                className={`text-xs gap-1 ${staleness.label === 'stale' ? 'border-red-300 text-red-600 dark:border-red-700 dark:text-red-400' : 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400'}`}
-              >
-                <AlertTriangle className="h-3 w-3" />
-                {staleness.label} ({Math.round(staleness.score * 100)}%)
-              </Badge>
-            )}
-          </div>
-        )}
+        {/* Compact status badges (health + staleness only — maturity is in the rail now) */}
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          {(asset as any).operational_health && (asset as any).operational_health !== 'unknown' && (
+            <Badge variant={(asset as any).operational_health === 'healthy' ? 'default' : 'destructive'}
+              className={`text-xs ${(asset as any).operational_health === 'healthy' ? 'bg-green-600' : ''}`}>
+              {(asset as any).operational_health}
+            </Badge>
+          )}
+          {staleness && staleness.label !== 'active' && (
+            <Badge
+              variant="outline"
+              className={`text-xs gap-1 ${staleness.label === 'stale' ? 'border-red-300 text-red-600 dark:border-red-700 dark:text-red-400' : 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400'}`}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {staleness.label} ({Math.round(staleness.score * 100)}%)
+            </Badge>
+          )}
+        </div>
 
         {/* Capability tags */}
         {capabilities.length > 0 && (
@@ -545,8 +644,9 @@ export default function AssetDetailView() {
         )}
       </div>
 
-      {/* Contract block */}
-      <MaturityContract maturity={(asset as any).maturity} />
+      {/* Lifecycle rail + Contract band */}
+      <LifecycleRail maturity={(asset as any).maturity || 'idea'} />
+      <ContractBand maturity={(asset as any).maturity || 'idea'} asset={asset as any} />
 
       {/* 2-column layout: main + rail */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
@@ -651,9 +751,6 @@ export default function AssetDetailView() {
             </CardContent>
           </Card>
 
-          {/* Maturity-specific context */}
-          <MaturityContextCard maturity={(asset as any).maturity} asset={asset as any} governance={governance} />
-
           {/* Type-specific context */}
           <TypeContextCard typeName={entityType} properties={asset.properties as any} />
 
@@ -748,15 +845,50 @@ export default function AssetDetailView() {
           )}
         </TabsContent>
 
-        {/* ─── Evidence Tab ─── */}
+        {/* ─── Evidence Tab (stage-gated) ─── */}
         <TabsContent value="evidence" className="mt-4 space-y-6">
-          <EvidenceScoreCard
-            evidenceScore={evidenceSummary?.evidence_score}
-            signalTypes={evidenceSummary?.signal_types}
-            totalSignals={evidenceSummary?.total_signals}
-            lastSignalAt={evidenceSummary?.last_signal_at}
-          />
-          <SignalTimeline assetId={asset.id} />
+          {(asset as any).maturity === 'idea' ? (
+            /* Ideas: no signals exist */
+            <Card>
+              <CardContent className="py-8 text-center">
+                <div className="text-3xl font-bold text-muted-foreground/30 mb-2">—</div>
+                <p className="text-sm text-muted-foreground">No signals. An idea has nothing running to measure.</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Evidence starts accruing the day code lands.</p>
+              </CardContent>
+            </Card>
+          ) : (asset as any).maturity === 'poc' ? (
+            /* POC: first signals + "sufficient for this stage" */
+            <>
+              <Card>
+                <CardContent className="py-4">
+                  <div className="flex items-end gap-4">
+                    <span className="text-2xl font-bold text-amber-600">Sufficient</span>
+                    <span className="text-xs text-muted-foreground mb-1">Complete for a prototype: it runs, and its limits are signed.</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <EvidenceScoreCard
+                evidenceScore={evidenceSummary?.evidence_score}
+                signalTypes={evidenceSummary?.signal_types}
+                totalSignals={evidenceSummary?.total_signals}
+                lastSignalAt={evidenceSummary?.last_signal_at}
+              />
+              <SignalTimeline assetId={asset.id} />
+            </>
+          ) : (
+            /* Validating + Production: full evidence */
+            <>
+              <EvidenceScoreCard
+                evidenceScore={evidenceSummary?.evidence_score}
+                signalTypes={evidenceSummary?.signal_types}
+                totalSignals={evidenceSummary?.total_signals}
+                lastSignalAt={evidenceSummary?.last_signal_at}
+              />
+              <SignalTimeline assetId={asset.id} />
+            </>
+          )}
+          {/* Gate checklist (idea/poc/validating only) */}
+          <GateChecklist maturity={(asset as any).maturity || 'idea'} />
         </TabsContent>
 
       </Tabs>
@@ -822,19 +954,27 @@ export default function AssetDetailView() {
         {/* Image carousel */}
         <ImageCarousel assetId={asset.id} />
 
-        {/* Adopt + Promote actions */}
+        {/* Stage-appropriate actions */}
         <div className="rounded-xl border p-4 space-y-2">
           <h3 className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-3">Actions</h3>
-          <Button
-            className="w-full"
-            size="sm"
-            onClick={async () => {
-              const resp = await apiPost<any>('/api/dpz/install', { asset_id: asset.id });
-              if (!resp.error) toast({ title: 'Adopted!', description: `Install count: ${resp.data?.install_count}` });
-            }}
-          >
-            Adopt this asset
-          </Button>
+          {(() => {
+            const stageActions = STAGE_ACTIONS[(asset as any).maturity || 'idea'] || STAGE_ACTIONS.production;
+            return (
+              <>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={async () => {
+                    const resp = await apiPost<any>('/api/dpz/install', { asset_id: asset.id });
+                    if (!resp.error) toast({ title: (asset as any).maturity === 'idea' ? 'Backed!' : 'Adopted!', description: `Install count: ${resp.data?.install_count}` });
+                  }}
+                >
+                  {stageActions.primary}
+                </Button>
+                <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">{stageActions.note}</p>
+              </>
+            );
+          })()}
 
           {/* Promotion request */}
           {(() => {
