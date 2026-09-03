@@ -42,7 +42,6 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
-import { MaturityContract } from '@/components/assets/maturity-contract';
 import { MATURITY_ORDER } from '@/components/assets/asset-card';
 import { SimilarAssets } from '@/components/assets/similar-assets';
 import { VersionTimeline } from '@/components/assets/version-timeline';
