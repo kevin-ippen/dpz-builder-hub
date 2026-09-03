@@ -57,6 +57,20 @@ class AssetDb(Base):
     certification_expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
     certification_notes = Column(Text, nullable=True)
 
+    # DPZ lifecycle fields
+    value_hypothesis = Column(Text, nullable=True)
+    demo_url = Column(String, nullable=True)
+    repo_url = Column(String, nullable=True)
+    originator = Column(String, nullable=True)
+    maturity = Column(String, nullable=True, index=True)
+    delivery_status = Column(String, nullable=True)
+    operational_health = Column(String, nullable=True)
+    publication_scope = Column(String, nullable=True)
+    install_count = Column(Integer, nullable=True, default=0)
+    latest_version = Column(String, nullable=True)
+    featured = Column(Boolean, nullable=True, default=False)
+    owner_email = Column(String, nullable=True)
+
     created_by = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
