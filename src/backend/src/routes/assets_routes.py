@@ -902,10 +902,11 @@ def wishlist_gap_analysis(db: DBSessionDep):
     rows = db.execute(sa.text("""
         SELECT
             c.id, c.name, c.slug, c.category,
-            COUNT(DISTINCT dc.demand_id) AS demand_count,
+            COUNT(DISTINCT d.id) AS demand_count,
             COUNT(DISTINCT ac.asset_id) AS asset_count
         FROM capabilities c
         LEFT JOIN demand_capabilities dc ON dc.capability_id = c.id
+        LEFT JOIN demands d ON d.id = dc.demand_id AND d.status = 'open'
         LEFT JOIN asset_capabilities ac ON ac.capability_id = c.id
         GROUP BY c.id, c.name, c.slug, c.category
         ORDER BY COUNT(DISTINCT dc.demand_id) DESC, COUNT(DISTINCT ac.asset_id) ASC

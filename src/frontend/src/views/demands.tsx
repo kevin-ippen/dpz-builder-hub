@@ -254,8 +254,11 @@ export default function WishlistView() {
   };
 
   const handleBack = async (id: string) => {
+    // Optimistic update — bump locally, rollback on error
+    const prev = items;
+    setItems((cur) => cur.map((i) => i.id === id ? { ...i, upvotes: i.upvotes + 1 } : i));
     const resp = await apiPost<any>(`/api/dpz/wishlist/${id}/upvote`, {});
-    if (!resp.error) { toast({ title: 'Backed!' }); fetchWishlist(); }
+    if (resp.error) { setItems(prev); toast({ variant: 'destructive', title: 'Back failed', description: resp.error }); }
   };
 
   /* ── Derived lists ── */
@@ -265,7 +268,7 @@ export default function WishlistView() {
     if (sortBy === 'backed') return [...open].sort((a, b) => b.upvotes - a.upvotes);
     if (sortBy === 'newest') return [...open].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     if (sortBy === 'waiting') return [...open].sort((a, b) => daysSince(b.created_at) - daysSince(a.created_at));
-    if (sortBy === 'no-supply') return open.filter((i) => i.capabilities?.some((c) => gaps.some((g) => g.slug === c.slug && g.asset_count === 0)));
+    if (sortBy === 'no-supply') return open.filter((i) => i.capabilities?.some((c) => gaps.some((g) => g.slug === c.slug && g.asset_count === 0))).sort((a, b) => readyScore(b, gaps) - readyScore(a, gaps));
     return open;
   }, [items, sortBy, gaps]);
 

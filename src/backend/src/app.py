@@ -368,9 +368,9 @@ async def startup_event():
                 for _name, _desc, _cat, _icon in _dpz_types:
                     _db.execute(sa.text(
                         "INSERT INTO asset_types (id, name, description, category, icon, is_system, status, created_at, updated_at) "
-                        "SELECT :id, :name::VARCHAR, :desc::VARCHAR, :cat::VARCHAR, :icon::VARCHAR, false, 'active', now(), now() "
-                        "WHERE NOT EXISTS (SELECT 1 FROM asset_types WHERE name = :name::VARCHAR)"
-                    ), {"id": str(_uuid.uuid4()), "name": _name, "desc": _desc, "cat": _cat, "icon": _icon})
+                        "SELECT :id, :name, :desc, :cat, :icon, false, 'active', now(), now() "
+                        "WHERE NOT EXISTS (SELECT 1 FROM asset_types WHERE name = :name_chk)"
+                    ), {"id": str(_uuid.uuid4()), "name": _name, "desc": _desc, "cat": _cat, "icon": _icon, "name_chk": _name})
                 _db.commit()
             except Exception as _eat_err:
                 _db.rollback()

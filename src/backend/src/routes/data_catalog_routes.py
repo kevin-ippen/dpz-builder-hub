@@ -231,7 +231,7 @@ async def get_table_lineage(
     request: Request,
     db: DBSessionDep,
     table_fqn: str,
-    direction: str = Query("both", regex="^(upstream|downstream|both)$"),
+    direction: str = Query("both", pattern="^(upstream|downstream|both)$"),
     obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> LineageGraph:
     """Get lineage graph for a table."""
@@ -253,7 +253,7 @@ async def get_column_lineage(
     db: DBSessionDep,
     table_fqn: str,
     column_name: str,
-    direction: str = Query("both", regex="^(upstream|downstream|both)$"),
+    direction: str = Query("both", pattern="^(upstream|downstream|both)$"),
     obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> LineageGraph:
     """Get column-level lineage."""
