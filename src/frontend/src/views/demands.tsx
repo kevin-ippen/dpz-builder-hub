@@ -666,7 +666,7 @@ export default function WishlistView() {
             activeTab === 'gaps' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
           )}>Gap map</button>
       </div>
-        </div>
+
       {/* ──── Queue view ──── */}
       {activeTab === 'queue' && (
         <section className="space-y-4">
