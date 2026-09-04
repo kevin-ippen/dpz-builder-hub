@@ -352,25 +352,29 @@ async def startup_event():
             else:
                 logger.info(f"DPZ DDL: {_cap_count} capabilities already seeded.")
 
-            # --- Seed DPZ asset types (idempotent) ---
-            _dpz_types = [
-                ('Skill', 'Reusable Databricks workspace skill', 'application', 'brain'),
-                ('Agent', 'AI agent (ResponsesAgent, LangGraph, etc.)', 'application', 'bot'),
-                ('MCP Server', 'Model Context Protocol server', 'application', 'plug'),
-                ('Cookbook', 'Reference implementation or best-practice guide', 'application', 'book-open'),
-                ('Template', 'Project template or starter kit', 'application', 'copy'),
-                ('Library', 'Shared Python/JS library or package', 'application', 'package'),
-                ('App', 'Databricks App (deployed web application)', 'application', 'layout'),
-                ('Genie Space', 'Natural language SQL exploration', 'analytics', 'message-circle'),
-                ('Repository', 'Git repository containing reusable code', 'infrastructure', 'git-branch'),
-            ]
-            for _name, _desc, _cat, _icon in _dpz_types:
-                _db.execute(sa.text(
-                    "INSERT INTO asset_types (id, name, description, category, icon, is_system, status, created_at, updated_at) "
-                    "SELECT :id, :name, :desc, :cat, :icon, false, 'active', now(), now() "
-                    "WHERE NOT EXISTS (SELECT 1 FROM asset_types WHERE name = :name)"
-                ), {"id": str(_uuid.uuid4()), "name": _name, "desc": _desc, "cat": _cat, "icon": _icon})
-            _db.commit()
+            # --- Seed DPZ asset types (idempotent, guarded against type errors) ---
+            try:
+                _dpz_types = [
+                    ('Skill', 'Reusable Databricks workspace skill', 'application', 'brain'),
+                    ('Agent', 'AI agent (ResponsesAgent, LangGraph, etc.)', 'application', 'bot'),
+                    ('MCP Server', 'Model Context Protocol server', 'application', 'plug'),
+                    ('Cookbook', 'Reference implementation or best-practice guide', 'application', 'book-open'),
+                    ('Template', 'Project template or starter kit', 'application', 'copy'),
+                    ('Library', 'Shared Python/JS library or package', 'application', 'package'),
+                    ('App', 'Databricks App (deployed web application)', 'application', 'layout'),
+                    ('Genie Space', 'Natural language SQL exploration', 'analytics', 'message-circle'),
+                    ('Repository', 'Git repository containing reusable code', 'infrastructure', 'git-branch'),
+                ]
+                for _name, _desc, _cat, _icon in _dpz_types:
+                    _db.execute(sa.text(
+                        "INSERT INTO asset_types (id, name, description, category, icon, is_system, status, created_at, updated_at) "
+                        "SELECT :id, :name::VARCHAR, :desc::VARCHAR, :cat::VARCHAR, :icon::VARCHAR, false, 'active', now(), now() "
+                        "WHERE NOT EXISTS (SELECT 1 FROM asset_types WHERE name = :name::VARCHAR)"
+                    ), {"id": str(_uuid.uuid4()), "name": _name, "desc": _desc, "cat": _cat, "icon": _icon})
+                _db.commit()
+            except Exception as _eat_err:
+                _db.rollback()
+                logger.info(f"DPZ asset types seed skipped (already exist or type error): {_eat_err}")
 
             # --- Seed diverse wishlist data if demands table is empty or only has uniform rows ---
             _demand_count = _db.execute(sa.text("SELECT COUNT(*) FROM demands")).scalar()
