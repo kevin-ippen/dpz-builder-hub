@@ -298,6 +298,13 @@ async def startup_event():
                 "ALTER TABLE demands ADD COLUMN IF NOT EXISTS budget_impact VARCHAR",
                 "ALTER TABLE demands ADD COLUMN IF NOT EXISTS reviewed_by VARCHAR",
                 "ALTER TABLE demands ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ",
+                "ALTER TABLE demands ADD COLUMN IF NOT EXISTS workaround TEXT",
+                "ALTER TABLE demands ADD COLUMN IF NOT EXISTS frequency VARCHAR",
+                "ALTER TABLE demands ADD COLUMN IF NOT EXISTS claimed_by VARCHAR",
+                "ALTER TABLE demands ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ",
+                "ALTER TABLE demands ADD COLUMN IF NOT EXISTS decline_reason TEXT",
+                "ALTER TABLE demands ADD COLUMN IF NOT EXISTS declined_by VARCHAR",
+                "ALTER TABLE demands ADD COLUMN IF NOT EXISTS linked_asset_name VARCHAR",
             ]
             _alter_ok = 0
             _alter_skip = 0
@@ -364,6 +371,125 @@ async def startup_event():
                     "WHERE NOT EXISTS (SELECT 1 FROM asset_types WHERE name = :name)"
                 ), {"id": str(_uuid.uuid4()), "name": _name, "desc": _desc, "cat": _cat, "icon": _icon})
             _db.commit()
+
+            # --- Seed diverse wishlist data if demands table is empty or only has uniform rows ---
+            _demand_count = _db.execute(sa.text("SELECT COUNT(*) FROM demands")).scalar()
+            _has_varied = _db.execute(sa.text("SELECT COUNT(DISTINCT status) FROM demands")).scalar() or 0
+            if _demand_count < 8 or _has_varied < 3:
+                logger.info(f"Seeding diverse wishlist data (currently {_demand_count} rows, {_has_varied} statuses)...")
+                # Clear existing sparse data
+                _db.execute(sa.text("DELETE FROM demand_capabilities"))
+                _db.execute(sa.text("DELETE FROM demands"))
+                _db.commit()
+
+                # Fetch capability IDs for linking
+                _cap_rows = _db.execute(sa.text("SELECT id, slug FROM capabilities")).fetchall()
+                _cap_map = {r[1]: str(r[0]) for r in _cap_rows}
+
+                _wishes = [
+                    # (id, title, desc, workaround, status, upvotes, created_by, created_at_offset_days, frequency, caps[], claimed_by, claimed_at_offset, decline_reason, declined_by, linked_asset_name)
+                    ('d0000001-0001-4000-8000-000000000001', 'Unified Customer Identity Graph',
+                     'Merge loyalty, online, app, and call-center identities into a single golden record. Customer Hub has partial coverage but misses offline-only customers.',
+                     'Three analysts hand-stitch identities in a shared notebook before every campaign readout.',
+                     'open', 11, 'rachel.torres@databricks.com', 34, 'weekly',
+                     ['feature-store', 'batch-etl', 'governed-catalog'], None, None, None, None, None),
+                    ('d0000001-0002-4000-8000-000000000002', 'Automated Menu Pricing Engine',
+                     'Dynamic pricing from ingredient cost, local competition, and demand signals. Needs a model, decision rules, and an audit trail.',
+                     None,
+                     'open', 9, 'david.okonkwo@databricks.com', 21, 'period',
+                     ['model-training', 'realtime-inference', 'semantic-layer'], None, None, None, None, None),
+                    ('d0000001-0003-4000-8000-000000000003', 'Store-Level P&L Dashboard',
+                     'Labor, food cost, delivery, and revenue in one per-store P&L.',
+                     'Finance team downloads four spreadsheets and pastes them together every Monday.',
+                     'open', 8, 'jordan.wells@databricks.com', 45, 'weekly',
+                     ['data-warehouse', 'semantic-layer', 'interactive-app'], None, None, None, None, None),
+                    ('d0000001-0004-4000-8000-000000000004', 'Coupon Attribution Model',
+                     'True incremental lift of coupon campaigns, controlling for cannibalization.',
+                     None,
+                     'open', 6, 'sarah.park@databricks.com', 12, None,
+                     ['feature-store', 'model-training'], None, None, None, None, None),
+                    ('d0000001-0005-4000-8000-000000000005', 'Competitor Monitoring Feed',
+                     'Automated scraping and sentiment analysis of competitor promos and menus.',
+                     None,
+                     'open', 6, 'david.okonkwo@databricks.com', 8, 'daily',
+                     ['streaming-ingest', 'realtime-inference', 'llm-orchestration'], None, None, None, None, None),
+                    ('d0000001-0006-4000-8000-000000000006', 'Labor Forecast by Daypart',
+                     'Predict staffing need per store per daypart from order velocity.',
+                     'Managers guess from last week. Over-staffing costs \u223c$400/store/week.',
+                     'open', 4, 'mike.thompson@databricks.com', 60, 'daily',
+                     ['model-training', 'batch-inference'], None, None, None, None, None),
+                    ('d0000001-0007-4000-8000-000000000007', 'Franchisee Self-Serve Reporting',
+                     'Let franchise owners pull their own numbers without a ticket.',
+                     'Every request goes through the analytics team. 3-day turnaround.',
+                     'open', 3, 'alex.liu@databricks.com', 5, 'weekly',
+                     ['nlq', 'semantic-layer', 'interactive-app'], None, None, None, None, None),
+                    # --- Claimed ---
+                    ('d0000001-0008-4000-8000-000000000008', 'Real-time DC Stockout Watch',
+                     'Alert store managers when a distribution center runs low on high-velocity SKUs.',
+                     None,
+                     'claimed', 7, 'sarah.park@databricks.com', 28, None,
+                     ['streaming-ingest', 'realtime-inference'], 'david.okonkwo@databricks.com', 12, None, None, 'Supply Chain Command Center'),
+                    # --- Shipped ---
+                    ('d0000001-0009-4000-8000-000000000009', 'Demand Forecast by Store-Day-Item',
+                     'ML-generated daily forecasts at SKU granularity for replenishment.',
+                     None,
+                     'shipped', 14, 'rachel.torres@databricks.com', 120, None,
+                     ['model-training', 'batch-inference', 'feature-store'], None, None, None, None, 'Demand Pulse Forecaster'),
+                    ('d0000001-000a-4000-8000-00000000000a', 'Catalog Ownership Audit',
+                     'Identify orphaned tables and assign owners across all Unity Catalog schemas.',
+                     None,
+                     'shipped', 9, 'kevin.ippen@databricks.com', 90, None,
+                     ['governed-catalog', 'observability'], None, None, None, None, 'Clean-up Aisle Five'),
+                    ('d0000001-000b-4000-8000-00000000000b', 'Customer Lifetime Value Model',
+                     'Score every customer on predicted 12-month revenue.',
+                     None,
+                     'shipped', 12, 'jordan.wells@databricks.com', 150, None,
+                     ['model-training', 'feature-store'], None, None, None, None, 'CLV Predictor v2'),
+                    ('d0000001-000c-4000-8000-00000000000c', 'Marketing Attribution Dashboard',
+                     'Multi-touch attribution across digital and in-store channels.',
+                     None,
+                     'shipped', 10, 'alex.liu@databricks.com', 200, None,
+                     ['data-warehouse', 'semantic-layer', 'interactive-app'], None, None, None, None, 'Campaign Impact Tracker'),
+                    # --- Declined ---
+                    ('d0000001-000d-4000-8000-00000000000d', 'Social Sentiment Scraper',
+                     'Scrape social media for brand sentiment in real-time.',
+                     None,
+                     'declined', 6, 'mike.thompson@databricks.com', 70, None,
+                     ['streaming-ingest', 'llm-orchestration'],
+                     None, None, 'Legal flagged the scraping approach, and the licensed feed marketing already pays for covers most of it.', 'kevin.ippen@databricks.com', None),
+                    ('d0000001-000e-4000-8000-00000000000e', 'Blockchain Loyalty Ledger',
+                     'Put loyalty points on a blockchain for transparency and portability.',
+                     None,
+                     'declined', 2, 'alex.liu@databricks.com', 40, None,
+                     ['operational-db'],
+                     None, None, 'No business case. Current loyalty DB handles this at 1/100th the complexity.', 'david.okonkwo@databricks.com', None),
+                ]
+
+                for _w in _wishes:
+                    _wid, _title, _desc, _wa, _status, _up, _by, _age, _freq, _caps, _claimed_by, _claimed_age, _dec_reason, _dec_by, _linked_name = _w
+                    _db.execute(sa.text(
+                        "INSERT INTO demands (id, title, description, workaround, status, upvotes, created_by, "
+                        "created_at, updated_at, frequency, claimed_by, claimed_at, decline_reason, declined_by, linked_asset_name) "
+                        "VALUES (:id, :title, :desc, :wa, :status, :up, :by, "
+                        "now() - make_interval(days => :age), now() - make_interval(days => :age_upd), :freq, "
+                        ":claimed_by, CASE WHEN :claimed_age IS NOT NULL THEN now() - make_interval(days => :claimed_age) ELSE NULL END, "
+                        ":dec_reason, :dec_by, :linked_name)"
+                    ), {
+                        "id": _wid, "title": _title, "desc": _desc, "wa": _wa,
+                        "status": _status, "up": _up, "by": _by, "age": _age,
+                        "age_upd": max(0, _age - (_age // 4)),  # updated more recently than created
+                        "freq": _freq, "claimed_by": _claimed_by, "claimed_age": _claimed_age,
+                        "dec_reason": _dec_reason, "dec_by": _dec_by, "linked_name": _linked_name,
+                    })
+                    # Link capabilities
+                    for _cslug in _caps:
+                        _cid = _cap_map.get(_cslug)
+                        if _cid:
+                            _db.execute(sa.text(
+                                "INSERT INTO demand_capabilities (demand_id, capability_id) VALUES (:did, :cid) ON CONFLICT DO NOTHING"
+                            ), {"did": _wid, "cid": _cid})
+                _db.commit()
+                logger.info(f"Seeded {len(_wishes)} diverse wishlist items with capability links.")
 
         logger.info("DPZ schema extensions applied successfully.")
     except Exception as e:

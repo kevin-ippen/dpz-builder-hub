@@ -760,7 +760,8 @@ def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
     result = db.execute(sa.text(
         "SELECT id, title, description, created_by, status, priority, category, "
         "upvotes, signals_count, domain, linked_asset_id, created_at, "
-        "business_justification, target_date, estimated_effort, requested_by_team, budget_impact, source "
+        "business_justification, target_date, estimated_effort, requested_by_team, budget_impact, source, "
+        "workaround, frequency, claimed_by, claimed_at, decline_reason, declined_by, linked_asset_name, updated_at "
         "FROM demands ORDER BY upvotes DESC, created_at DESC"
     ))
     items = []
@@ -778,6 +779,14 @@ def list_wishlist(db: DBSessionDep, current_user: CurrentUserDep):
             "requested_by_team": row[15],
             "budget_impact": row[16],
             "source": row[17] or "organic",
+            "workaround": row[18],
+            "frequency": row[19],
+            "claimed_by": row[20],
+            "claimed_at": row[21].isoformat() if row[21] else None,
+            "decline_reason": row[22],
+            "declined_by": row[23],
+            "linked_asset_name": row[24],
+            "updated_at": row[25].isoformat() if row[25] else None,
         })
     # Attach capability names to each item
     if items:
