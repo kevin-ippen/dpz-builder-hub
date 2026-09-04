@@ -376,11 +376,12 @@ async def startup_event():
                 _db.rollback()
                 logger.info(f"DPZ asset types seed skipped (already exist or type error): {_eat_err}")
 
-            # --- Seed diverse wishlist data if demands table is empty or only has uniform rows ---
-            _demand_count = _db.execute(sa.text("SELECT COUNT(*) FROM demands")).scalar()
-            _has_varied = _db.execute(sa.text("SELECT COUNT(DISTINCT status) FROM demands")).scalar() or 0
-            if _demand_count < 8 or _has_varied < 3:
-                logger.info(f"Seeding diverse wishlist data (currently {_demand_count} rows, {_has_varied} statuses)...")
+            # --- Seed diverse wishlist data (check for v2 marker row) ---
+            _v2_marker = _db.execute(sa.text(
+                "SELECT COUNT(*) FROM demands WHERE id = 'd0000001-0001-4000-8000-000000000001'"
+            )).scalar()
+            if _v2_marker == 0:
+                logger.info("Seeding v2 diverse wishlist data (marker row missing)...")
                 # Clear existing sparse data
                 _db.execute(sa.text("DELETE FROM demand_capabilities"))
                 _db.execute(sa.text("DELETE FROM demands"))
