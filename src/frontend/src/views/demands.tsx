@@ -261,6 +261,31 @@ export default function WishlistView() {
     if (resp.error) { setItems(prev); toast({ variant: 'destructive', title: 'Back failed', description: resp.error }); }
   };
 
+  const handleClaim = async (id: string) => {
+    const prev = items;
+    setItems((cur) => cur.map((i) => i.id === id ? { ...i, status: 'claimed' } : i));
+    const resp = await apiPost<any>(`/api/dpz/wishlist/${id}/claim`, {});
+    if (resp.error) { setItems(prev); toast({ variant: 'destructive', title: 'Claim failed', description: resp.error }); }
+    else { toast({ title: 'Claimed!', description: 'You\u2019re building this now.' }); }
+  };
+
+  const handleReopen = async (id: string) => {
+    const prev = items;
+    setItems((cur) => cur.map((i) => i.id === id ? { ...i, status: 'open' } : i));
+    const resp = await apiPost<any>(`/api/dpz/wishlist/${id}/reopen`, {});
+    if (resp.error) { setItems(prev); toast({ variant: 'destructive', title: 'Reopen failed', description: resp.error }); }
+    else { toast({ title: 'Reopened', description: 'Back in the queue.' }); }
+  };
+
+  const handleFollow = async (id: string) => {
+    const resp = await apiPost<any>(`/api/dpz/wishlist/${id}/follow`, {});
+    if (resp.error) { toast({ variant: 'destructive', title: 'Follow failed', description: resp.error }); }
+    else {
+      const un = resp.data?.status === 'unfollowed';
+      toast({ title: un ? 'Unfollowed' : 'Following', description: un ? 'You won\u2019t get updates.' : 'You\u2019ll be notified of changes.' });
+    }
+  };
+
   /* ── Derived lists ── */
   const openItems = useMemo(() => {
     const open = items.filter((i) => i.status === 'open');
@@ -507,7 +532,7 @@ export default function WishlistView() {
                         <div className="grid gap-2 min-w-[112px]">
                           <Button size="sm" className="w-full justify-center text-[12.5px] h-8 rounded-lg" onClick={() => handleBack(item.id)}>Back it</Button>
                           <button className="text-[12.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                            onClick={() => toast({ title: 'Claimed!', description: `"${item.title}" will appear in the Lab with ${item.upvotes} backers.` })}>
+                            onClick={() => handleClaim(item.id)}>
                             Claim this wish
                           </button>
                         </div>
@@ -543,7 +568,7 @@ export default function WishlistView() {
                             <span className="text-[11.5px] text-muted-foreground/60 font-mono">{bf.teams} team{bf.teams > 1 ? 's' : ''}</span>
                             <span className="text-[11.5px] text-muted-foreground/60 font-mono">+{motion} wk</span>
                             <button className="text-[12.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                              onClick={() => toast({ title: 'Claimed!', description: `"${item.title}" will appear in the Lab.` })}>Claim</button>
+                              onClick={() => handleClaim(item.id)}>Claim</button>
                           </div>
                         </div>
                       );
@@ -573,7 +598,7 @@ export default function WishlistView() {
                         {item.linked_asset_name && (<> &middot; now <a className="text-blue-600 hover:underline dark:text-blue-400 cursor-pointer" onClick={() => item.linked_asset_id && navigate(`/assets/${item.linked_asset_id}`)}>{item.linked_asset_name}</a></>)}
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" className="text-[11px] h-7">Follow</Button>
+                    <Button size="sm" variant="outline" className="text-[11px] h-7" onClick={() => handleFollow(item.id)}>Follow</Button>
                   </div>
                 ))}
                 {shipped.map((item) => (
@@ -601,7 +626,7 @@ export default function WishlistView() {
                         {item.declined_by && (<> Decided by {ownerShort(item.declined_by)} &middot; {item.upvotes} backers notified.</>)}
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" className="text-[11px] h-7 gap-1"><Undo2 className="h-3 w-3" /> Reopen</Button>
+                    <Button size="sm" variant="outline" className="text-[11px] h-7 gap-1" onClick={() => handleReopen(item.id)}><Undo2 className="h-3 w-3" /> Reopen</Button>
                   </div>
                 ))}
               </div>
@@ -708,7 +733,7 @@ export default function WishlistView() {
                                   <b className="text-[13.2px] font-medium block leading-snug">{w.title}</b>
                                   <span className="text-[11.8px] text-muted-foreground">{wBf.teams} team{wBf.teams > 1 ? 's' : ''}</span>
                                 </div>
-                                <button className="text-[12.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground shrink-0">I&apos;d help build this</button>
+                                <button className="text-[12.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground shrink-0" onClick={() => handleClaim(w.id)}>I&apos;d help build this</button>
                               </div>
                             );
                           })}
@@ -729,7 +754,7 @@ export default function WishlistView() {
                       {/* Verdict callout */}
                       <div className={cn('mt-3 rounded-xl border p-3 text-[13px] flex gap-3 items-center flex-wrap', g.asset_count === 0 ? 'bg-destructive/5 border-destructive/20 text-destructive' : v.text === 'saturated' ? 'bg-muted border-border text-muted-foreground' : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-300')}>
                         <span className="flex-1"><b>{g.backers} people across {g.teams} team{g.teams > 1 ? 's' : ''}, {supplyLabel(sb)}.</b></span>
-                        <Button size="sm" variant="outline" className="text-[11px] h-7 shrink-0">Follow this gap</Button>
+                        <Button size="sm" variant="outline" className="text-[11px] h-7 shrink-0" onClick={() => { const top = gapWishes.sort((a, b) => b.upvotes - a.upvotes)[0]; if (top) handleFollow(top.id); }}>Follow this gap</Button>
                       </div>
                     </div>
                   )}

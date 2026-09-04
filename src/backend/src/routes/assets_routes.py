@@ -974,6 +974,68 @@ def upvote_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUs
     return {"status": "upvoted"}
 
 
+@dpz_router.post("/wishlist/{item_id}/reopen")
+def reopen_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserDep):
+    """Reopen a declined wishlist item."""
+    import sqlalchemy as sa
+    try:
+        db.execute(sa.text(
+            "UPDATE demands SET status = 'open', decline_reason = NULL, declined_by = NULL, updated_at = now() WHERE id = :id"
+        ), {"id": item_id})
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Fall back — decline columns may not exist yet
+        db.execute(sa.text(
+            "UPDATE demands SET status = 'open', updated_at = now() WHERE id = :id"
+        ), {"id": item_id})
+        db.commit()
+    return {"status": "reopened"}
+
+
+@dpz_router.post("/wishlist/{item_id}/claim")
+def claim_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserDep):
+    """Claim a wishlist item for building."""
+    import sqlalchemy as sa
+    user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'system')
+    try:
+        db.execute(sa.text(
+            "UPDATE demands SET status = 'claimed', claimed_by = :by, claimed_at = now(), updated_at = now() WHERE id = :id"
+        ), {"id": item_id, "by": user_email})
+        db.commit()
+    except Exception:
+        db.rollback()
+        # Fall back — claimed_by/claimed_at columns may not exist yet
+        db.execute(sa.text(
+            "UPDATE demands SET status = 'claimed', updated_at = now() WHERE id = :id"
+        ), {"id": item_id})
+        db.commit()
+    return {"status": "claimed", "claimed_by": user_email}
+
+
+@dpz_router.post("/wishlist/{item_id}/follow")
+def follow_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserDep):
+    """Toggle follow on a wishlist item. Returns 'following' or 'unfollowed'."""
+    import sqlalchemy as sa
+    user_email = getattr(current_user, 'email', None) or getattr(current_user, 'user_name', 'system')
+    existing = db.execute(sa.text(
+        "SELECT 1 FROM demand_followers WHERE demand_id = :did AND user_email = :email"
+    ), {"did": item_id, "email": user_email}).fetchone()
+    if existing:
+        db.execute(sa.text(
+            "DELETE FROM demand_followers WHERE demand_id = :did AND user_email = :email"
+        ), {"did": item_id, "email": user_email})
+        db.commit()
+        return {"status": "unfollowed"}
+    else:
+        db.execute(sa.text(
+            "INSERT INTO demand_followers (demand_id, user_email) VALUES (:did, :email) "
+            "ON CONFLICT DO NOTHING"
+        ), {"did": item_id, "email": user_email})
+        db.commit()
+        return {"status": "following"}
+
+
 @dpz_router.get("/wishlist/{item_id}")
 def get_wishlist_item(item_id: str, db: DBSessionDep, current_user: CurrentUserDep):
     """Get a single wishlist item with its capabilities."""

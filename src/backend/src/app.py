@@ -319,6 +319,21 @@ async def startup_event():
             if _alter_skip > 0:
                 logger.info(f"DPZ DDL: {_alter_ok} ALTER succeeded, {_alter_skip} skipped (not table owner — OK if columns already exist)")
 
+            # --- Create demand_followers table (App SP owns new tables) ---
+            try:
+                _db.execute(sa.text(
+                    "CREATE TABLE IF NOT EXISTS demand_followers ("
+                    "  demand_id VARCHAR NOT NULL,"
+                    "  user_email VARCHAR NOT NULL,"
+                    "  followed_at TIMESTAMPTZ DEFAULT now(),"
+                    "  PRIMARY KEY (demand_id, user_email)"
+                    ")"
+                ))
+                _db.commit()
+            except Exception as _ff_err:
+                _db.rollback()
+                logger.info(f"demand_followers table: {_ff_err}")
+
             # --- Seed capabilities if empty ---
             _cap_count = _db.execute(sa.text("SELECT COUNT(*) FROM capabilities")).scalar()
             if _cap_count == 0:
