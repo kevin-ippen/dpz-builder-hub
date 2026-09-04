@@ -695,7 +695,14 @@ class AssetSummary(BaseModel):
     domains: List[AssignedDomain] = Field(default_factory=list)
     parent_id: Optional[UUID] = Field(None, description="ID of the parent asset (from hierarchical relationship)")
     parent_name: Optional[str] = Field(None, description="Name of the parent asset")
+    created_by: Optional[str] = None
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    install_count: Optional[int] = None
+    latest_version: Optional[str] = None
+    owner_email: Optional[str] = None
+    value_hypothesis: Optional[str] = None
+    properties: Optional[Dict[str, Any]] = None
     # DPZ lifecycle (lightweight for list badges)
     maturity: Optional[str] = None
     publication_scope: Optional[str] = None
