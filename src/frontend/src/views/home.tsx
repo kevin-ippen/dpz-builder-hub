@@ -36,6 +36,37 @@ interface Stats { total: number; featured: number; production: number; }
 const AV_COLORS = ['bg-blue-500','bg-emerald-500','bg-purple-500','bg-amber-500','bg-rose-500','bg-cyan-500','bg-indigo-500','bg-teal-500'];
 function avColor(s: string) { let h=0; for(let i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h); return AV_COLORS[Math.abs(h)%AV_COLORS.length]; }
 
+// Deterministic gradient palette — every card gets a unique hero treatment
+const GRAD_PAIRS = [
+  ['from-blue-500/12 via-indigo-400/8 to-purple-500/14', 'text-blue-700 dark:text-blue-300'],
+  ['from-emerald-500/12 via-teal-400/8 to-cyan-500/14', 'text-emerald-700 dark:text-emerald-300'],
+  ['from-purple-500/12 via-fuchsia-400/8 to-pink-500/14', 'text-purple-700 dark:text-purple-300'],
+  ['from-amber-500/12 via-orange-400/8 to-rose-500/14', 'text-amber-700 dark:text-amber-300'],
+  ['from-rose-500/12 via-pink-400/8 to-purple-500/14', 'text-rose-700 dark:text-rose-300'],
+  ['from-cyan-500/12 via-sky-400/8 to-blue-500/14', 'text-cyan-700 dark:text-cyan-300'],
+  ['from-indigo-500/12 via-violet-400/8 to-purple-500/14', 'text-indigo-700 dark:text-indigo-300'],
+  ['from-teal-500/12 via-emerald-400/8 to-green-500/14', 'text-teal-700 dark:text-teal-300'],
+];
+function cardGrad(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return GRAD_PAIRS[Math.abs(h) % GRAD_PAIRS.length];
+}
+
+// Icon per asset type
+const TYPE_ICONS: Record<string, any> = {
+  Skill: GraduationCap, Agent: Zap, App: Box, 'MCP Server': Upload,
+  Cookbook: Package, Template: FlaskConical, Library: Package, 'Genie Space': Search,
+  Repository: Box,
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 const CAP_CLR: Record<string,string> = {
   data: 'bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-300 dark:border-blue-800',
   ai: 'bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-300 dark:border-purple-800',
@@ -62,12 +93,13 @@ function SpotlightCard({ asset, caps, heroUrl }: { asset: MarketplaceAsset; caps
       className="group overflow-hidden shadow-card hover:shadow-card-hover hover:border-primary/25 hover:-translate-y-1 transition-all duration-200 cursor-pointer border rounded-xl"
       onClick={() => navigate(`/assets/${asset.id}`)}
     >
-      <div className="relative h-[100px] overflow-hidden bg-gradient-to-br from-primary/8 via-background to-primary/15">
+      <div className={cn('relative h-[110px] overflow-hidden bg-gradient-to-br', heroUrl && !imgErr ? '' : cardGrad(asset.name)[0])}>
         {heroUrl && !imgErr ? (
           <img src={heroUrl} alt={asset.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" onError={() => setImgErr(true)} />
         ) : (
-          <div className="flex items-end h-full p-4">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="flex flex-col items-center justify-center h-full gap-2">
+            {(() => { const I = TYPE_ICONS[asset.type_name] || Box; return <I className={cn('h-7 w-7 opacity-40', cardGrad(asset.name)[1])} />; })()}
+            <span className={cn('text-[9px] font-mono font-bold uppercase tracking-[0.12em] opacity-50', cardGrad(asset.name)[1])}>
               {asset.type_name}
             </span>
           </div>
@@ -221,11 +253,12 @@ export default function HomeView() {
             <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-primary font-bold">{appName}</p>
           </div>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-3">
-            Discover, adopt, and ship<br />what the team is building.
+            {greeting()}. <span className="text-muted-foreground">What are we building?</span>
           </h1>
           <p className="text-sm text-muted-foreground mb-6 max-w-lg">
-            Production-ready accelerators in Explore. Experimental builds and vibe projects in the Lab.
-            Everything governed, everything reusable.
+            Certified accelerators in <button className="underline underline-offset-2 hover:text-foreground" onClick={() => navigate('/assets')}>Explore</button>,
+            experiments in <button className="underline underline-offset-2 hover:text-foreground" onClick={() => navigate('/lab')}>the Lab</button>,
+            and the team's <button className="underline underline-offset-2 hover:text-foreground" onClick={() => navigate('/wishlist')}>wishlist</button> of what should exist next.
           </p>
           {/* Search */}
           <div className="flex gap-2 max-w-md">
@@ -422,7 +455,9 @@ export default function HomeView() {
                           <img src={hUrl} alt={a.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         </div>
                       ) : (
-                        <div className="h-10 bg-gradient-to-r from-primary/5 to-primary/10" />
+                        <div className={cn('h-14 bg-gradient-to-r flex items-center justify-center', cardGrad(a.name)[0])}>
+                          {(() => { const I = TYPE_ICONS[a.type_name] || Box; return <I className={cn('h-5 w-5 opacity-30', cardGrad(a.name)[1])} />; })()}
+                        </div>
                       )}
                       <div className="p-4">
                         <div className="flex items-center gap-2">
@@ -453,19 +488,31 @@ export default function HomeView() {
                 }
               />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {topWishes.map(w => (
-                  <button
-                    key={w.id}
-                    className="text-left rounded-xl border p-4 hover:shadow-card-hover hover:border-primary/20 transition-all group"
-                    onClick={() => navigate(`/wishlist/${w.id}`)}
-                  >
-                    <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{w.title}</p>
-                    <div className="flex items-center gap-2 mt-2 text-[11px] text-muted-foreground">
-                      <ThumbsUp className="h-3 w-3" />
-                      <span className="font-mono font-semibold text-foreground">{w.upvotes}</span> upvotes
-                    </div>
-                  </button>
-                ))}
+                {topWishes.map((w, idx) => {
+                  const grad = GRAD_PAIRS[idx % GRAD_PAIRS.length];
+                  return (
+                    <button
+                      key={w.id}
+                      className="text-left rounded-xl border overflow-hidden hover:shadow-card-hover hover:border-primary/20 hover:-translate-y-0.5 transition-all group"
+                      onClick={() => navigate('/wishlist')}
+                    >
+                      <div className={cn('h-2 bg-gradient-to-r', grad[0])} />
+                      <div className="p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[10px] font-mono font-bold text-muted-foreground">#{idx + 1}</span>
+                          <Lightbulb className={cn('h-3.5 w-3.5', grad[1])} />
+                        </div>
+                        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{w.title}</p>
+                        <div className="flex items-center gap-2 mt-2.5 text-[11px] text-muted-foreground">
+                          <span className={cn('inline-flex items-center gap-1 font-mono font-semibold px-1.5 py-0.5 rounded-md border text-[10px]', w.upvotes >= 15 ? 'bg-destructive/10 border-destructive/30 text-destructive' : 'bg-muted border-border text-foreground')}>
+                            <ThumbsUp className="h-2.5 w-2.5" /> {w.upvotes}
+                          </span>
+                          <span>backers</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </section>
           )}

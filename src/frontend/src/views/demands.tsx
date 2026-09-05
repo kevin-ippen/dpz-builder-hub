@@ -71,6 +71,13 @@ const GAP_SORT_OPTIONS = [
 const REVIEW_THRESHOLD = 15;
 const TOP_N = 3;
 
+// Gradient palette for top-3 hero strips
+const HERO_GRADS = [
+  'from-blue-500/10 via-indigo-400/6 to-purple-500/12',
+  'from-emerald-500/10 via-teal-400/6 to-cyan-500/12',
+  'from-amber-500/10 via-orange-400/6 to-rose-500/12',
+];
+
 /* ──────────────── Helpers ──────────────── */
 function seeded(id: string, salt: number, min: number, max: number) {
   const text = `${id}:${salt}`;
@@ -481,7 +488,9 @@ export default function WishlistView() {
                     const threshold = Math.max(0, REVIEW_THRESHOLD - item.upvotes);
                     const gap = scarcestGap(item, gaps);
                     return (
-                      <article key={item.id} className="rounded-xl border bg-card p-4 grid gap-4 items-start grid-cols-[58px_minmax(0,1fr)_auto]">
+                      <article key={item.id} className="rounded-xl border bg-card overflow-hidden">
+                        <div className={cn('h-1.5 bg-gradient-to-r', HERO_GRADS[idx % HERO_GRADS.length])} />
+                        <div className="p-4 grid gap-4 items-start grid-cols-[58px_minmax(0,1fr)_auto]">
                         {/* Rank + backer button */}
                         <div className="text-center">
                           <button onClick={() => handleBack(item.id)}
@@ -535,6 +544,7 @@ export default function WishlistView() {
                             onClick={() => handleClaim(item.id)}>
                             Claim this wish
                           </button>
+                        </div>
                         </div>
                       </article>
                     );
