@@ -15,11 +15,14 @@ env:
   - name: "FRONTEND_STATIC_DIR"
     value: "./static"
 
-  # Keep valueFrom to trigger database resource injection (PGHOST is also auto-injected with same value)
-  # - name: "PGHOST"
-  #   valueFrom: "database"
-  # PGDATABASE, PGPORT, PGUSER are auto-injected by Databricks Apps
-  # Keep schema (no PG* auto-injection):
+  # Explicit PG vars — auto-injection broke after resource restore (2026-09-08).
+  # These are the Lakebase Autoscale pooler endpoint values.
+  - name: "PGHOST"
+    value: "ep-holy-bonus-d2zxevy5-pooler.database.us-east-1.cloud.databricks.com"
+  - name: "PGDATABASE"
+    value: "databricks-postgres"
+  - name: "PGPORT"
+    value: "5432"
   - name: "PGSCHEMA"
     value: "app_ontos"
   # Force search_path via connection options so SP finds the schema
