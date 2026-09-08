@@ -3016,7 +3016,7 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
     #   DPZ_FEEDS_BRONZE_SCHEMA, DPZ_FEEDS_BRONZE_TABLE
     import os
     _cat = os.environ.get("DPZ_FEEDS_CATALOG", "serverless_stable_h7wanf_catalog")
-    _gold_fqn = f"{_cat}.{os.environ.get('DPZ_FEEDS_GOLD_SCHEMA', 'feeds_gold')}.{os.environ.get('DPZ_FEEDS_GOLD_TABLE', 'content_search_source')}"
+    _gold_fqn = f"{_cat}.{os.environ.get('DPZ_FEEDS_GOLD_SCHEMA', 'feeds_silver')}.{os.environ.get('DPZ_FEEDS_GOLD_TABLE', 'content_enriched')}"
     _bronze_fqn = f"{_cat}.{os.environ.get('DPZ_FEEDS_BRONZE_SCHEMA', 'feeds_bronze')}.{os.environ.get('DPZ_FEEDS_BRONZE_TABLE', 'content_raw')}"
 
     # Query feeds via SQL warehouse
@@ -3050,12 +3050,12 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
         LIMIT {limit}
         """
     else:
-        # Read from enriched gold pipeline (default)
+        # Read from enriched pipeline (default)
         query = f"""
         SELECT
-            item_id, title, COALESCE(enriched_summary, summary) AS summary,
+            item_id, title, COALESCE(card_blurb, summary) AS summary,
             url, published_at, source_name, content_type,
-            product_area, impact_level, topics,
+            product_area, impact_level, card_badges AS topics,
             image_url, action_summary
         FROM {_gold_fqn}
         WHERE published_at >= current_date() - INTERVAL {max_age_days} DAYS
@@ -3088,10 +3088,11 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
 
     # Map content_type to our source taxonomy
     source_map = {
-        "release_notes": "release", "announcement": "release",
+        "release_note": "release", "release_notes": "release", "announcement": "release",
         "blog": "blog", "customer_story": "blog", "case_study": "blog",
-        "reference_architecture": "blog",
-        "tutorial": "howto", "training": "howto",
+        "deep_dive": "blog", "press": "blog", "reference_architecture": "blog",
+        "tutorial": "howto", "training": "howto", "how_to": "howto",
+        "demo": "howto", "video": "howto", "event": "blog",
         "repository": "repo",
     }
 

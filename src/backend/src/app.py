@@ -334,6 +334,31 @@ async def startup_event():
                 _db.rollback()
                 logger.info(f"demand_followers table: {_ff_err}")
 
+            # --- Create learn_content + learn_tracks tables (for Learn hub) ---
+            for _learn_ddl in [
+                """CREATE TABLE IF NOT EXISTS learn_content (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    title VARCHAR NOT NULL, description TEXT,
+                    source VARCHAR NOT NULL DEFAULT 'blog',
+                    url VARCHAR DEFAULT '#',
+                    tags JSONB DEFAULT '[]'::jsonb,
+                    author VARCHAR,
+                    published_at TIMESTAMPTZ DEFAULT now(),
+                    channel VARCHAR NOT NULL DEFAULT 'team',
+                    relevance_capabilities JSONB DEFAULT '[]'::jsonb,
+                    track_slug VARCHAR, track_order INTEGER)""",
+                """CREATE TABLE IF NOT EXISTS learn_tracks (
+                    slug VARCHAR PRIMARY KEY,
+                    title VARCHAR NOT NULL, description TEXT,
+                    icon VARCHAR DEFAULT 'database',
+                    category VARCHAR DEFAULT 'platform')""",
+            ]:
+                try:
+                    _db.execute(sa.text(_learn_ddl))
+                    _db.commit()
+                except Exception:
+                    _db.rollback()
+
             # --- Seed capabilities if empty ---
             _cap_count = _db.execute(sa.text("SELECT COUNT(*) FROM capabilities")).scalar()
             if _cap_count == 0:
@@ -498,6 +523,95 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"DPZ schema extensions: {e}", exc_info=True)
         logger.warning(f"DPZ schema extensions: {e}", exc_info=True)
+
+    # --- Auto-sync platform content from UC feeds pipeline if learn_content is empty ---
+    try:
+        import json as _json_sync
+        _sf2 = get_session_factory()
+        with _sf2() as _ldb:
+            _platform_count = _ldb.execute(sa.text(
+                "SELECT COUNT(*) FROM learn_content WHERE channel = 'platform'"
+            )).scalar()
+            if _platform_count == 0:
+                logger.info("learn_content empty for platform — auto-syncing from UC feeds...")
+                from databricks.sdk import WorkspaceClient
+                from databricks.sdk.service.sql import StatementState
+                _w = WorkspaceClient()
+                _wh_id = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4047b28d66a51bdc")
+                for _r3 in (getattr(_w.config, '_resources', None) or []):
+                    if hasattr(_r3, 'sql_warehouse'):
+                        _wh_id = _r3.sql_warehouse.id
+                        break
+                _fcat = os.environ.get("DPZ_FEEDS_CATALOG", "serverless_stable_h7wanf_catalog")
+                _ftbl = f"{_fcat}.feeds_silver.content_enriched"
+                _sync_q = f"""
+                SELECT item_id, title, COALESCE(card_blurb, summary) AS summary,
+                       url, published_at, source_name, content_type,
+                       product_area, card_badges, image_url
+                FROM {_ftbl}
+                WHERE published_at >= current_date() - INTERVAL 120 DAYS
+                  AND title IS NOT NULL AND title != ''
+                ORDER BY published_at DESC
+                LIMIT 300
+                """
+                _stmt2 = _w.statement_execution.execute_statement(
+                    warehouse_id=_wh_id, statement=_sync_q, wait_timeout="50s",
+                )
+                if _stmt2.status.state == StatementState.SUCCEEDED and _stmt2.result and _stmt2.result.data_array:
+                    _cols2 = [c.name for c in _stmt2.manifest.schema.columns]
+                    _src_map = {
+                        "release_note": "release", "blog": "blog", "customer_story": "blog",
+                        "how_to": "howto", "deep_dive": "blog", "tutorial": "howto",
+                        "training": "howto", "press": "blog", "event": "blog",
+                        "demo": "howto", "video": "howto",
+                    }
+                    _syn = 0
+                    for _row2 in _stmt2.result.data_array:
+                        _rec2 = dict(zip(_cols2, _row2))
+                        _t = (_rec2.get("title") or "").strip()
+                        if not _t:
+                            continue
+                        _ct = _rec2.get("content_type") or ""
+                        _src = _src_map.get(_ct, "blog")
+                        _badges = _rec2.get("card_badges")
+                        _tgs = []
+                        if isinstance(_badges, list):
+                            _tgs = [str(b) for b in _badges[:5]]
+                        elif isinstance(_badges, str):
+                            try:
+                                _tgs = _json_sync.loads(_badges)[:5]
+                            except Exception:
+                                pass
+                        if _rec2.get("product_area"):
+                            _tgs.append(_rec2["product_area"])
+                        _cid2 = str(_uuid.uuid4())
+                        try:
+                            _ldb.execute(sa.text("""
+                                INSERT INTO learn_content
+                                  (id, title, description, source, url, tags, author, published_at,
+                                   channel, relevance_capabilities)
+                                VALUES (:id, :title, :desc, :source, :url, :tags::jsonb, :author,
+                                        COALESCE(:pub::timestamptz, now()), 'platform', '[]'::jsonb)
+                            """), {
+                                "id": _cid2, "title": _t,
+                                "desc": (_rec2.get("summary") or "")[:500],
+                                "source": _src,
+                                "url": _rec2.get("url") or "#",
+                                "tags": _json_sync.dumps(_tgs[:6]),
+                                "author": _rec2.get("source_name"),
+                                "pub": _rec2.get("published_at"),
+                            })
+                            _syn += 1
+                        except Exception:
+                            continue
+                    _ldb.commit()
+                    logger.info(f"Auto-synced {_syn} platform items from {_ftbl}")
+                else:
+                    logger.warning(f"UC feeds query status: {_stmt2.status}")
+            else:
+                logger.info(f"learn_content already has {_platform_count} platform items, skipping auto-sync.")
+    except Exception as e:
+        logger.warning(f"Auto-sync of platform content failed (non-blocking): {e}")
 
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
     
