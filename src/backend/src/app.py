@@ -550,8 +550,8 @@ async def startup_event():
                                 INSERT INTO learn_content
                                   (id, title, description, source, url, tags, author, published_at,
                                    channel, relevance_capabilities)
-                                VALUES (:id, :title, :desc, :source, :url, :tags::jsonb, :author,
-                                        COALESCE(:pub::timestamptz, now()), 'platform', '[]'::jsonb)
+                                VALUES (:id, :title, :desc, :source, :url, CAST(:tags AS jsonb), :author,
+                                        COALESCE(CAST(:pub AS timestamptz), now()), 'platform', CAST('[]' AS jsonb))
                             """), {
                                 "id": _cid2, "title": _t,
                                 "desc": (_item.get("description") or "")[:500],
