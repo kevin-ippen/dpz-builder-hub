@@ -15,14 +15,10 @@ env:
   - name: "FRONTEND_STATIC_DIR"
     value: "./static"
 
-  # Explicit PG vars — auto-injection broke after resource restore (2026-09-08).
-  # These are the Lakebase Autoscale pooler endpoint values.
-  - name: "PGHOST"
-    value: "ep-holy-bonus-d2zxevy5-pooler.database.us-east-1.cloud.databricks.com"
-  - name: "PGDATABASE"
-    value: "databricks-postgres"
-  - name: "PGPORT"
-    value: "5432"
+  # PG host/database/port auto-injected by Databricks Apps from postgres resource.
+  # Do NOT hardcode — the platform overrides env vars and hardcoded values
+  # cause "no schema has been selected" errors (the pooler endpoint
+  # differs from the auto-injected direct endpoint).
   - name: "PGSCHEMA"
     value: "app_ontos"
   # Force search_path via connection options so SP finds the schema
