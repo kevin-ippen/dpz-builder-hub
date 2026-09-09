@@ -151,12 +151,14 @@ def sanitize_postgres_identifier(identifier: str, max_length: int = 63) -> str:
     if is_valid_uuid(identifier):
         return identifier
     
-    # PostgreSQL allows letters, digits, underscores, and dollar signs
-    # Must start with letter or underscore
-    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_$]*$', identifier):
+    # PostgreSQL allows letters, digits, underscores, and dollar signs.
+    # Hyphens are also allowed for Lakebase database names (e.g. 'databricks-postgres')
+    # — these are safe when quoted in SQL (the connection URL handles quoting).
+    # Must start with letter or underscore.
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_$-]*$', identifier):
         raise ValueError(
             f"Invalid PostgreSQL identifier '{identifier}': must start with letter or underscore "
-            "and contain only letters, digits, underscores, and dollar signs"
+            "and contain only letters, digits, underscores, dollar signs, and hyphens"
         )
     
     # Check against PostgreSQL reserved keywords (most common ones)
