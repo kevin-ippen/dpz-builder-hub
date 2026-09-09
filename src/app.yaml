@@ -19,11 +19,12 @@ env:
   # Do NOT hardcode — the platform overrides env vars and hardcoded values
   # cause "no schema has been selected" errors (the pooler endpoint
   # differs from the auto-injected direct endpoint).
+  # Schema renamed from app_ontos -> dpz_hub after resource re-provision broke ownership
   - name: "PGSCHEMA"
-    value: "app_ontos"
+    value: "dpz_hub"
   # Force search_path via connection options so SP finds the schema
   - name: "PGOPTIONS"
-    value: "-c search_path=app_ontos,public"
+    value: "-c search_path=dpz_hub,public"
   # Lakebase Autoscale endpoint for credential generation
   - name: "ENDPOINT_NAME"
     value: "projects/dpz-builder-hub-as/branches/production/endpoints/primary"
