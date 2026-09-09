@@ -562,7 +562,9 @@ async def startup_event():
                                 "pub": _item.get("published_at"),
                             })
                             _syn += 1
-                        except Exception:
+                        except Exception as _ins_err:
+                            if _syn == 0:
+                                logger.warning(f"Learn seed INSERT failed (first error): {_ins_err}")
                             continue
                     _ldb.commit()
                     logger.info(f"Seeded {_syn} platform items from {_seed_path.name}")
