@@ -2226,6 +2226,7 @@ def _parse_learn_row(r, col_offset=0):
         "relevance_capabilities": rel_caps or [],
         "track_slug": r[10 + col_offset] if len(r) > (10 + col_offset) else None,
         "track_order": r[11 + col_offset] if len(r) > (11 + col_offset) else None,
+        "image_url": r[12 + col_offset] if len(r) > (12 + col_offset) else None,
     }
 
 
@@ -2254,7 +2255,7 @@ def list_learn_content(
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     rows = db.execute(sa.text(f"""
         SELECT id, title, description, source, url, tags, author, published_at,
-               channel, relevance_capabilities, track_slug, track_order
+               channel, relevance_capabilities, track_slug, track_order, image_url
         FROM learn_content {where}
         ORDER BY COALESCE(track_order, 999), published_at DESC
     """), params)

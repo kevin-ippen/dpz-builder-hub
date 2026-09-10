@@ -31,6 +31,7 @@ interface LearnItem {
   relevance_capabilities?: string[];
   track_slug?: string;
   track_order?: number;
+  image_url?: string;
 }
 
 interface Track {
@@ -72,70 +73,119 @@ const SOURCE_FILTER_TABS = [
 
 
 
+// ─── Hero gradient generator (deterministic per title hash) ─────────
+const HERO_PALETTES: Record<string, [string, string, string]> = {
+  release:  ['#059669', '#10b981', '#34d399'],  // emerald
+  blog:     ['#2563eb', '#3b82f6', '#60a5fa'],  // blue
+  howto:    ['#d97706', '#f59e0b', '#fbbf24'],  // amber
+  external: ['#475569', '#64748b', '#94a3b8'],  // slate
+  repo:     ['#7c3aed', '#8b5cf6', '#a78bfa'],  // violet
+};
+
+function heroHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function heroGradient(source: string, title: string): string {
+  const pal = HERO_PALETTES[source] || HERO_PALETTES.external;
+  const h = heroHash(title);
+  const angle = 120 + (h % 60);  // 120-180deg
+  const shift = (h % 20) - 10;   // slight hue jitter
+  return `linear-gradient(${angle}deg, ${pal[0]}, ${pal[1]} 50%, ${pal[2]})`;
+}
+
+// SVG pattern overlay for non-image heroes
+function heroPattern(source: string): string {
+  const patterns: Record<string, string> = {
+    release: `url("data:image/svg+xml,%3Csvg width='20' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='rgba(255,255,255,0.1)'/%3E%3C/svg%3E")`,
+    blog:    `url("data:image/svg+xml,%3Csvg width='24' height='24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 12h24M12 0v24' stroke='rgba(255,255,255,0.06)' stroke-width='1'/%3E%3C/svg%3E")`,
+    howto:   `url("data:image/svg+xml,%3Csvg width='16' height='16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 16L16 0' stroke='rgba(255,255,255,0.07)' stroke-width='1'/%3E%3C/svg%3E")`,
+    external:`url("data:image/svg+xml,%3Csvg width='20' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='4' height='4' x='8' y='8' fill='rgba(255,255,255,0.05)'/%3E%3C/svg%3E")`,
+  };
+  return patterns[source] || patterns.external;
+}
+
 // ─── Learn Card ─────────────────────────────────────────────────────
 function LearnCard({ item, showRelevance }: { item: LearnItem; showRelevance?: boolean }) {
   const cfg = SOURCE_CONFIG[item.source] || SOURCE_CONFIG.external;
   const Icon = cfg.icon;
   const caps = item.relevance_capabilities || [];
+  const hasImage = !!item.image_url;
+
   return (
     <Card
       className="group overflow-hidden shadow-card hover:shadow-card-hover hover:border-primary/25 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer border rounded-xl"
       onClick={() => item.url !== '#' && window.open(item.url, '_blank')}
     >
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-            <Icon className="h-4 w-4 text-primary" />
+      {/* ── Hero section ── */}
+      <div className="relative h-36 overflow-hidden">
+        {hasImage ? (
+          <img
+            src={item.image_url}
+            alt=""
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ background: heroGradient(item.source, item.title), backgroundImage: heroPattern(item.source) + ', ' + heroGradient(item.source, item.title) }}
+          >
+            <Icon className="h-10 w-10 text-white/30" />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <Badge className={cn('text-[9px] font-mono uppercase px-1.5 py-0 border-0', cfg.color)}>
-                {cfg.label}
-              </Badge>
-              {showRelevance && caps.length > 0 && (
-                <Badge variant="outline" className="text-[9px] font-mono gap-1 border-primary/30 text-primary">
-                  <Zap className="h-2.5 w-2.5" /> {caps.length} cap{caps.length !== 1 ? 's' : ''}
-                </Badge>
-              )}
-              {item.date && (
-                <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
-                  <Calendar className="h-2.5 w-2.5" />
-                  {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-              )}
-            </div>
-            <h3 className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors mb-1">
-              {item.title}
-              {item.url !== '#' && <ExternalLink className="inline h-3 w-3 ml-1 opacity-0 group-hover:opacity-50 transition-opacity" />}
-            </h3>
-            <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-2">
-              {item.description}
-            </p>
-            {showRelevance && caps.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {caps.slice(0, 4).map(c => (
-                  <span key={c} className="px-1.5 py-0.5 text-[9px] font-mono rounded border bg-primary/5 text-primary/80 border-primary/20">
-                    {c.replace(/-/g, ' ')}
-                  </span>
-                ))}
-              </div>
-            )}
-            {!showRelevance && item.tags && item.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {item.tags.map(t => (
-                  <span key={t} className="px-1.5 py-0.5 text-[9px] font-mono rounded border bg-muted/50 text-muted-foreground">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            )}
-            {item.author && (
-              <p className="text-[10px] text-muted-foreground mt-2">
-                by {item.author}
-              </p>
-            )}
-          </div>
+        )}
+        {/* Floating source badge */}
+        <div className="absolute top-2.5 left-2.5">
+          <Badge className={cn('text-[9px] font-mono uppercase px-1.5 py-0.5 border-0 shadow-sm backdrop-blur-sm', cfg.color)}>
+            {cfg.label}
+          </Badge>
         </div>
+        {/* Floating date */}
+        {item.date && (
+          <div className="absolute top-2.5 right-2.5">
+            <span className="text-[9px] font-mono text-white/80 bg-black/30 backdrop-blur-sm rounded px-1.5 py-0.5 flex items-center gap-1">
+              <Calendar className="h-2.5 w-2.5" />
+              {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Content section ── */}
+      <CardContent className="p-4">
+        <h3 className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors mb-1.5 line-clamp-2">
+          {item.title}
+          {item.url !== '#' && <ExternalLink className="inline h-3 w-3 ml-1 opacity-0 group-hover:opacity-50 transition-opacity" />}
+        </h3>
+        <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 mb-2">
+          {item.description}
+        </p>
+        {showRelevance && caps.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {caps.slice(0, 4).map(c => (
+              <span key={c} className="px-1.5 py-0.5 text-[9px] font-mono rounded border bg-primary/5 text-primary/80 border-primary/20">
+                {c.replace(/-/g, ' ')}
+              </span>
+            ))}
+          </div>
+        )}
+        {!showRelevance && item.tags && item.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {item.tags.slice(0, 4).map(t => (
+              <span key={t} className="px-1.5 py-0.5 text-[9px] font-mono rounded border bg-muted/50 text-muted-foreground">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+        {item.author && (
+          <p className="text-[10px] text-muted-foreground">
+            by {item.author}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -473,14 +523,23 @@ export default function LearnView() {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map(i => <Card key={i} className="h-32 animate-pulse bg-muted/50" />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <Card key={i} className="overflow-hidden rounded-xl animate-pulse">
+              <div className="h-36 bg-muted/50" />
+              <div className="p-4 space-y-2">
+                <div className="h-4 bg-muted/50 rounded w-3/4" />
+                <div className="h-3 bg-muted/30 rounded w-full" />
+                <div className="h-3 bg-muted/30 rounded w-1/2" />
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 
       {/* Channel: From Your Team */}
       {!loading && channel === 'team' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTeam.map((item) => (
             <LearnCard key={item.id} item={item} />
           ))}
@@ -498,7 +557,7 @@ export default function LearnView() {
 
       {/* Channel: Platform Pulse */}
       {!loading && channel === 'platform' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredPlatform.map((item) => (
             <LearnCard key={item.id} item={item} showRelevance />
           ))}
