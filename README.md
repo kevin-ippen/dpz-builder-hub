@@ -1,6 +1,6 @@
 # Builder Hub
 
-<img width="2172" height="724" alt="builderhub" src="https://github.com/user-attachments/assets/8a2061dc-6ca9-477d-967b-4d2617cce82c" />
+<img width="1672" height="941" alt="builder_hub" src="https://github.com/user-attachments/assets/28582860-60ec-49b6-8cfd-d33236f68b72" />
 
 You have hundreds of tables, models, dashboards, and pipelines in Unity Catalog. What you don't have is a way to answer the questions that actually matter:
 
