@@ -1,180 +1,204 @@
-# Ontos
+# Builder Hub
 
-[![Test Coverage](https://github.com/databrickslabs/ontos/actions/workflows/test-coverage.yml/badge.svg?branch=main)](https://github.com/databrickslabs/ontos/actions/workflows/test-coverage.yml)
-[![codecov](https://codecov.io/gh/databrickslabs/ontos/branch/main/graph/badge.svg)](https://codecov.io/gh/databrickslabs/ontos)
-[![backend coverage](https://codecov.io/gh/databrickslabs/ontos/branch/main/graph/badge.svg?flag=backend)](https://codecov.io/gh/databrickslabs/ontos?flags[0]=backend)
-[![frontend coverage](https://codecov.io/gh/databrickslabs/ontos/branch/main/graph/badge.svg?flag=frontend)](https://codecov.io/gh/databrickslabs/ontos?flags[0]=frontend)
+A modular data product management platform for Databricks. Organize, govern, and deliver data assets with built-in maturity tracking, compliance automation, and team collaboration.
 
-A comprehensive data governance and management platform built for Databricks Unity Catalog.
+Runs as a **Databricks App** backed by **Lakebase** (managed PostgreSQL).
 
-![Home](docs/images/home.png)
+## Deploy in 15 Minutes
 
-## Overview
+### 1. Create the App
 
-**Ontos** provides enterprise teams with the tools to organize, govern, and deliver high-quality data products following Data Mesh principles and industry standards like [ODCS](https://github.com/bitol-io/open-data-contract-standard) (Open Data Contract Standard) and [ODPS](https://github.com/bitol-io/open-data-product-standard) (Open Data Product Specification).
+```bash
+databricks apps create builder-hub
+```
 
-## Key Features
+### 2. Provision Resources
 
-### 📊 Data Products
-Group and manage related Databricks assets (tables, views, functions, models, dashboards) as cohesive, consumable products with clear ownership and lifecycle management.
+The app needs four resources. Provision them in the Databricks UI or via CLI:
 
-### 📝 Data Contracts
-Define formal specifications for data assets with schema definitions, quality rules, SLOs, and semantic meaning following the ODCS v3.1.0 standard.
+| Resource | Type | Purpose |
+|----------|------|--------|
+| **Lakebase** | PostgreSQL (Autoscale) | App metadata store |
+| **SQL Warehouse** | Serverless | Unity Catalog queries |
+| **Serving Endpoint** | Foundation Model | AI-assisted reviews (optional) |
+| **UC Volume** | WRITE_VOLUME | File storage |
 
-### 📦 Datasets
-Register and group existing data assets across systems (Unity Catalog, Snowflake) and environments (dev, staging, prod), bridging physical assets to formal contracts.
+See `src/manifest.yaml` for the full resource spec.
 
-### 🏢 Organizational Structure
-Organize data work using **Domains**, **Teams**, and **Projects** aligned with your organizational structure and data mesh architecture.
+### 3. Configure `app.yaml`
 
-### 🧠 Semantic Models
-Link technical data assets to business concepts through a knowledge graph, enabling semantic search and maintaining a shared vocabulary.
+Edit `src/app.yaml`:
 
-### ✅ Compliance Automation
-Define and enforce governance policies using a declarative DSL (Domain-Specific Language). Run automated compliance checks with configurable actions (tagging, notifications, enforcement).
+```yaml
+env:
+  # REQUIRED: Set your Lakebase endpoint
+  - name: "ENDPOINT_NAME"
+    value: "projects/YOUR_PROJECT/branches/production/endpoints/primary"
+  - name: "LAKEBASE_INSTANCE_NAME"
+    value: "projects/YOUR_PROJECT/branches/production/endpoints/primary"
 
-### 🔍 Asset Review Workflows
-Enable Data Stewards to formally review and approve assets before production promotion, with AI-assisted analysis and full audit trails.
+  # Schema name (will be auto-created on first boot)
+  - name: "PGSCHEMA"
+    value: "app_data"
+  - name: "PGOPTIONS"
+    value: "-c search_path=app_data,public"
+```
 
-### 🤖 AI Integration (MCP)
-Expose your data governance platform to AI assistants via the Model Context Protocol (MCP), enabling natural language queries and automation.
+### 4. Deploy
+
+```bash
+databricks apps deploy builder-hub \
+  --source-code-path /Workspace/Users/<you>/builder-hub/src
+```
+
+### 5. Load Demo Data
+
+Open the app, go to **Settings**, and click **Load Demo Data** with the `retail` preset. This populates assets, wishlist items, capabilities, and learn content.
+
+---
+
+## Module System
+
+Every feature area is controlled by an environment variable. Set any to `false` in `app.yaml` to disable:
+
+| Module | Env Var | Default | What It Controls |
+|--------|---------|---------|------------------|
+| Explore | `MODULE_EXPLORE` | on | Browse assets by type, maturity, domain |
+| Lab | `MODULE_LAB` | on | Pre-production experimental builds |
+| Learn | `MODULE_LEARN` | on | Blogs, release notes, skill tracks |
+| Portfolio | `MODULE_PORTFOLIO` | on | User's personal asset portfolio |
+| Wishlist | `MODULE_WISHLIST` | on | Demand board — upvote, claim, ship |
+| Dashboard | `MODULE_DASHBOARD` | on | Portfolio health and adoption signals |
+| MCP | `MODULE_MCP` | on | Model Context Protocol server |
+| Compliance | `MODULE_COMPLIANCE` | on | Policy DSL engine and automated checks |
+| Contracts | `MODULE_CONTRACTS` | on | ODCS data contracts |
+| Semantic | `MODULE_SEMANTIC` | on | Ontology and semantic models |
+| Pipeline | `MODULE_PIPELINE` | **off** | Blog/release-note feed scraper (opt-in) |
+
+Disabled modules hide from the nav, home page, and quick actions. The backend skips their startup tasks.
+
+---
 
 ## Architecture
 
-Ontos is designed to run as a **Databricks App**:
+```
+src/
+├── app.yaml              # Databricks App config (env vars, command)
+├── manifest.yaml         # Resource requirements (Lakebase, warehouse, endpoint, volume)
+├── backend/              # Python — FastAPI + SQLAlchemy + Alembic
+│   ├── src/
+│   │   ├── app.py        # Entrypoint, startup lifecycle, seed logic
+│   │   ├── common/       # Config, DB engine, auth, middleware
+│   │   ├── controller/   # Business logic managers
+│   │   ├── db_models/    # SQLAlchemy ORM models
+│   │   ├── models/       # Pydantic API schemas
+│   │   ├── repositories/ # DB access layer
+│   │   ├── routes/       # API endpoints
+│   │   └── data/         # Demo SQL, seed JSON, YAML configs
+│   └── alembic/          # Database migrations
+├── frontend/             # React + TypeScript + Vite
+│   └── src/
+│       ├── views/        # Page components
+│       ├── components/   # UI library (Shadcn + custom)
+│       ├── hooks/        # useApi, useModules, useTeams, ...
+│       ├── config/       # features.ts (module registry)
+│       └── stores/       # Zustand state
+└── pipeline/             # Optional feeds crawler (MODULE_PIPELINE)
+```
 
-- **Frontend**: React + TypeScript with Tailwind CSS and Shadcn UI
-- **Backend**: Python + FastAPI with SQLAlchemy ORM
-- **Database**: PostgreSQL (or Databricks Lakebase in production)
-- **Integration**: Native Databricks SDK integration for Unity Catalog operations
+**Auth**: Databricks Apps OAuth. Service principal auto-provisioned.
+**Database**: Lakebase (PostgreSQL). Schema created on first boot via Alembic migrations.
+**Frontend build**: Vite builds to `static/`, served by FastAPI.
 
-## Quick Start
+---
+
+## Local Development
 
 ### Prerequisites
 
-- Python 3.10 - 3.12
-- Node.js 18+ (includes npm)
-- Hatch (Python build tool)
-- PostgreSQL (for local development)
+- Python 3.10–3.12, Node.js 18+, Hatch, PostgreSQL
 
-### Installation
+### Setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/databrickslabs/ontos.git
-cd ontos
+git clone <repo-url> && cd builder-hub
 
-# Install frontend dependencies
-cd src/frontend
-npm install
+# Frontend
+cd src/frontend && npm install
 
-# Copy and configure backend environment
-cd ../../src/backend
-cp .env.example .env
-# Edit .env with your configuration
+# Backend
+cd ../backend && cp .env.example .env
+# Edit .env: set POSTGRES_HOST, DATABRICKS_HOST, etc.
 ```
 
-### Running Locally
-
-**Terminal 1 - Frontend:**
-```bash
-cd src/frontend
-npm run dev:frontend
-```
-
-**Terminal 2 - Backend:**
-```bash
-cd src
-mkdir backend/static
-hatch -e dev run dev-backend
-```
-
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-### Deploying to Databricks
+### Run
 
 ```bash
-databricks bundle deploy --var="catalog=app_data" --var="schema=app_ontos"
-databricks apps deploy <app-name>
+# Terminal 1: Frontend (port 3000)
+cd src/frontend && npm run dev:frontend
+
+# Terminal 2: Backend (port 8000)
+cd src && hatch -e dev run dev-backend
 ```
+
+---
+
+## Customization
+
+### Branding
+
+Set env vars in `app.yaml` or `.env`:
+
+| Variable | Purpose |
+|----------|--------|
+| `UI_APP_DISPLAY_NAME` | App name in header/title |
+| `UI_APP_SHORT_NAME` | Abbreviated name for compact UI |
+| `UI_CUSTOM_LOGO_URL` | Logo image URL |
+| `UI_FAVICON_URL` | Favicon URL |
+| `UI_CUSTOM_CSS` | Injected CSS for theme overrides |
+
+### Demo Data
+
+Presets in `backend/src/data/`:
+
+| Preset | File | Description |
+|--------|------|------------|
+| `retail` | `demo_data_retail.sql` | Retail vertical (default) |
+| `hls` | `demo_data_hls.sql` | Healthcare & Life Sciences |
+| `fsi` | `demo_data_fsi.sql` | Financial Services |
+| `mfg` | `demo_data_mfg.sql` | Manufacturing |
+| `auto` | `demo_data_auto.sql` | Automotive |
+
+### Feeds Pipeline (opt-in)
+
+Set `MODULE_PIPELINE=true` and configure:
+
+```yaml
+- name: "DPZ_FEEDS_CATALOG"
+  value: "your_catalog"
+- name: "MODULE_PIPELINE"
+  value: "true"
+```
+
+The pipeline scrapes Databricks blog, Azure release notes, and YouTube into the Learn hub.
+
+---
+
+## Standards
+
+- [ODCS](https://github.com/bitol-io/open-data-contract-standard) — Open Data Contract Standard (v3.1.0)
+- [ODPS](https://github.com/bitol-io/open-data-product-standard) — Open Data Product Specification
+- [MCP](https://modelcontextprotocol.io/) — Model Context Protocol for AI integration
 
 ## Documentation
 
 | Document | Description |
-|----------|-------------|
-| [User Guide](src/docs/USER-GUIDE.md) | Comprehensive guide for end users |
-| [Configuring](CONFIGURING.md) | Environment variables, database setup, and deployment |
-| [Contributing](CONTRIBUTING.md) | Development setup, commit guidelines, and release process |
-| [API Docs](http://localhost:8000/docs) | Interactive API documentation (when running locally) |
-| [Compliance DSL Guide](src/docs/compliance-dsl-guide.md) | Quick start for writing compliance rules |
-| [Compliance DSL Reference](src/docs/compliance-dsl-reference.md) | Complete DSL syntax reference |
-
-## User Roles
-
-Ontos supports role-based access control with predefined roles:
-
-| Role | Description |
-|------|-------------|
-| **Admin** | Full system access |
-| **Data Governance Officer** | Broad governance oversight |
-| **Data Steward** | Review and approve contracts/products |
-| **Data Producer** | Create and manage data products |
-| **Data Consumer** | Discover and use data products |
-| **Security Officer** | Security and entitlements management |
-
-## Project Structure
-
-```
-ontos/
-├── src/
-│   ├── backend/           # FastAPI backend
-│   │   ├── src/
-│   │   │   ├── common/    # Shared utilities
-│   │   │   ├── controller/# Business logic managers
-│   │   │   ├── db_models/ # SQLAlchemy models
-│   │   │   ├── models/    # Pydantic API models
-│   │   │   ├── repositories/ # Database access
-│   │   │   └── routes/    # API endpoints
-│   │   └── alembic/       # Database migrations
-│   ├── frontend/          # React frontend
-│   │   └── src/
-│   │       ├── components/# UI components
-│   │       ├── views/     # Page components
-│   │       ├── hooks/     # Custom React hooks
-│   │       ├── stores/    # State management
-│   │       └── types/     # TypeScript definitions
-│   ├── docs/              # Documentation
-│   └── scripts/           # Build and utility scripts
-├── docs/                  # Additional documentation
-├── CONTRIBUTING.md        # Contributing guidelines
-└── README.md              # This file
-```
-
-## Standards & Specifications
-
-Ontos implements and integrates with these standards:
-
-- **[ODCS](https://github.com/bitol-io/open-data-contract-standard)** - Open Data Contract Standard (v3.1.0)
-- **[ODPS](https://github.com/bitol-io/open-data-product-standard)** - Open Data Product Specification
-- **[MCP](https://modelcontextprotocol.io/)** - Model Context Protocol for AI integration
-- **[RDF](https://www.w3.org/RDF/)** - Resource Description Framework for ontology-driven asset modeling
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for:
-
-- Development setup instructions
-- Commit message conventions (we use [Conventional Commits](https://www.conventionalcommits.org/))
-- Versioning and release process
-- Code style guidelines
-- Pull request process
+|----------|------------|
+| [Configuring](CONFIGURING.md) | All env vars, DB setup, deployment |
+| [User Guide](src/docs/USER-GUIDE.md) | End-user guide |
+| [Compliance DSL](src/docs/compliance-dsl-guide.md) | Writing governance rules |
+| [Contributing](CONTRIBUTING.md) | Dev setup, commits, releases |
 
 ## License
 
-This project is licensed under the Databricks License - see the [LICENSE.txt](LICENSE.txt) file for details.
-
----
-
-**Maintained by**: [Databricks](https://databricks.com)
+See [LICENSE.txt](LICENSE.txt) for details.
