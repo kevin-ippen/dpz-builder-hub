@@ -44,6 +44,8 @@ Builder Hub is designed to fix all of these problems without adding bureaucracy.
 
 ## How It Works
 
+<img width="1774" height="887" alt="process" src="https://github.com/user-attachments/assets/bb230b24-fa24-4a89-b020-3b959668dad3" />
+
 ### 1. Register what exists (Explore)
 
 Assets in Builder Hub are **pointers to things that already exist** in your Databricks workspace — UC tables, ML models, dashboards, notebooks, pipelines. Registration is lightweight: you're adding context (owner, description, capabilities, domain) to something that already has a technical home.
