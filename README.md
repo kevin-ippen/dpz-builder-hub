@@ -2,6 +2,8 @@
 
 **The missing layer between Unity Catalog and your business.**
 
+<img width="1536" height="1024" alt="builder-hub" src="https://github.com/user-attachments/assets/0e87926a-3172-4cb7-bd73-21f7e70946c7" />
+
 You have hundreds of tables, models, dashboards, and pipelines in Unity Catalog. What you don't have is a way to answer the questions that actually matter:
 
 - *"What production-ready assets do we have for demand forecasting?"*
