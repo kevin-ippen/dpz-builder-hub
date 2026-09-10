@@ -1,6 +1,6 @@
 # Builder Hub
 
-<img width="1536" height="1024" alt="builder-hub" src="https://github.com/user-attachments/assets/0e87926a-3172-4cb7-bd73-21f7e70946c7" />
+<img width="2172" height="724" alt="builderhub" src="https://github.com/user-attachments/assets/8a2061dc-6ca9-477d-967b-4d2617cce82c" />
 
 You have hundreds of tables, models, dashboards, and pipelines in Unity Catalog. What you don't have is a way to answer the questions that actually matter:
 
@@ -43,8 +43,6 @@ Builder Hub is designed to fix all of these problems without adding bureaucracy.
 ---
 
 ## How It Works
-
-<img width="1774" height="887" alt="process" src="https://github.com/user-attachments/assets/bb230b24-fa24-4a89-b020-3b959668dad3" />
 
 ### 1. Register what exists (Explore)
 
