@@ -39,7 +39,7 @@ except ImportError:
         from config import CATALOG, BRONZE_SCHEMA, BRONZE_TABLE, FEED_SOURCES
     except ImportError:
         import os
-        CATALOG = os.getenv("DPZ_FEEDS_CATALOG", "serverless_stable_h7wanf_catalog")
+        CATALOG = os.getenv("DPZ_FEEDS_CATALOG", "")
         BRONZE_SCHEMA = os.getenv("DPZ_FEEDS_BRONZE_SCHEMA", "feeds_bronze")
         BRONZE_TABLE = os.getenv("DPZ_FEEDS_BRONZE_TABLE", "content_raw")
         FEED_SOURCES = []

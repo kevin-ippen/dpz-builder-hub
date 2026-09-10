@@ -11,6 +11,7 @@ import { getNavigationGroups, FeatureConfig } from '@/config/features';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
+import { useModules } from '@/hooks/use-modules';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
@@ -25,8 +26,9 @@ export function Navigation({ isCollapsed }: NavigationProps) {
   const location = useLocation();
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
   const { permissions, isLoading: permissionsLoading, hasPermission } = usePermissions();
+  const enabledModules = useModules();
 
-  const rawNavigationGroups = getNavigationGroups(allowedMaturities);
+  const rawNavigationGroups = getNavigationGroups(allowedMaturities, enabledModules);
 
   const ungroupedFeatureIds: string[] = [];
 

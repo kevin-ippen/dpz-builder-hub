@@ -19,17 +19,18 @@ env:
   # Do NOT hardcode — the platform overrides env vars and hardcoded values
   # cause "no schema has been selected" errors (the pooler endpoint
   # differs from the auto-injected direct endpoint).
+  # Database schema name — change to your preferred schema
   - name: "PGSCHEMA"
-    value: "app_ontos"
-  # Force search_path via connection options so SP finds the schema
+    value: "app_data"
   - name: "PGOPTIONS"
-    value: "-c search_path=app_ontos,public"
-  # Lakebase Autoscale endpoint for credential generation
+    value: "-c search_path=app_data,public"
+  # Lakebase Autoscale endpoint for credential generation.
+  # CHANGE THIS to your Lakebase project endpoint after provisioning.
+  # Format: projects/<project-name>/branches/<branch>/endpoints/primary
   - name: "ENDPOINT_NAME"
-    value: "projects/dpz-builder-hub-as/branches/production/endpoints/primary"
-  # Legacy fallback (used if ENDPOINT_NAME is unset)
+    value: "projects/CHANGE_ME/branches/production/endpoints/primary"
   - name: "LAKEBASE_INSTANCE_NAME"
-    value: "projects/dpz-builder-hub-as/branches/production/endpoints/primary"
+    value: "projects/CHANGE_ME/branches/production/endpoints/primary"
   
   - name: "DATABRICKS_WAREHOUSE_ID"
     valueFrom: "sql-warehouse"

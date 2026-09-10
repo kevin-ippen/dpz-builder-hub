@@ -44,6 +44,49 @@ router = APIRouter(prefix="/api", tags=["Settings"])
 SETTINGS_FEATURE_ID = "settings" # Define a feature ID for settings
 ROLE_NOT_FOUND = "Role not found"
 
+
+@router.get('/settings/modules')
+def get_modules():
+    """Return enabled/disabled state of every module.
+
+    No auth required — the frontend needs this before it can render navigation.
+    Reads MODULE_* flags from config (env vars).
+    """
+    from ..common.config import get_settings
+    s = get_settings()
+    return {
+        "modules": {
+            "explore":    s.MODULE_EXPLORE,
+            "lab":        s.MODULE_LAB,
+            "learn":      s.MODULE_LEARN,
+            "portfolio":  s.MODULE_PORTFOLIO,
+            "wishlist":   s.MODULE_WISHLIST,
+            "dashboard":  s.MODULE_DASHBOARD,
+            "mcp":        s.MODULE_MCP,
+            "compliance": s.MODULE_COMPLIANCE,
+            "pipeline":   s.MODULE_PIPELINE,
+            "contracts":  s.MODULE_CONTRACTS,
+            "semantic":   s.MODULE_SEMANTIC,
+        }
+    }
+
+
+@router.get('/settings/branding')
+def get_branding():
+    """Return branding configuration.
+
+    No auth required — the frontend needs this to render the shell.
+    """
+    from ..common.config import get_settings
+    s = get_settings()
+    return {
+        "app_name":      s.UI_APP_DISPLAY_NAME or "Builder Hub",
+        "app_short_name": s.UI_APP_SHORT_NAME or "",
+        "logo_url":      s.UI_CUSTOM_LOGO_URL or "",
+        "favicon_url":   s.UI_FAVICON_URL or "",
+        "i18n_enabled":  s.UI_I18N_ENABLED,
+    }
+
 @router.get('/settings')
 async def get_settings_route(
     manager: SettingsManager = Depends(get_settings_manager),

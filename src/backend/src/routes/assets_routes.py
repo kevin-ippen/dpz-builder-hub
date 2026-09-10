@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 import uuid as _uuid
 import json
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
@@ -713,8 +714,8 @@ def remove_asset_relationship(
 
 dpz_router = APIRouter(prefix="/api/dpz", tags=["DPZ Hub"])
 
-_VS_INDEX_NAME = "serverless_stable_h7wanf_catalog.dpz_builder_hub.asset_search_corpus_index"
-_VS_ENDPOINT = "dpz_builder_hub_vs"
+_VS_INDEX_NAME = os.environ.get("VS_INDEX_NAME", "")
+_VS_ENDPOINT = os.environ.get("VS_ENDPOINT_NAME", "")
 
 
 @dpz_router.post("/similar")
@@ -3016,7 +3017,7 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
     #   DPZ_FEEDS_CATALOG, DPZ_FEEDS_GOLD_SCHEMA, DPZ_FEEDS_GOLD_TABLE,
     #   DPZ_FEEDS_BRONZE_SCHEMA, DPZ_FEEDS_BRONZE_TABLE
     import os
-    _cat = os.environ.get("DPZ_FEEDS_CATALOG", "serverless_stable_h7wanf_catalog")
+    _cat = os.environ.get("DPZ_FEEDS_CATALOG", "")
     _gold_fqn = f"{_cat}.{os.environ.get('DPZ_FEEDS_GOLD_SCHEMA', 'feeds_silver')}.{os.environ.get('DPZ_FEEDS_GOLD_TABLE', 'content_enriched')}"
     _bronze_fqn = f"{_cat}.{os.environ.get('DPZ_FEEDS_BRONZE_SCHEMA', 'feeds_bronze')}.{os.environ.get('DPZ_FEEDS_BRONZE_TABLE', 'content_raw')}"
 
@@ -3028,7 +3029,7 @@ def sync_feeds_to_platform_pulse(body: dict, db: DBSessionDep, current_user: Cur
             warehouse_id = r.sql_warehouse.id
             break
     if not warehouse_id:
-        warehouse_id = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4047b28d66a51bdc")
+        warehouse_id = os.environ.get("DATABRICKS_WAREHOUSE_ID", "")
 
     if feed_source == "bronze":
         # Read from crawler's bronze table

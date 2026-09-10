@@ -4,7 +4,7 @@ bundle:
 variables:
   sql_warehouse_id:
     description: "ID of the SQL warehouse to use"
-    default: "4047b28d66a51bdc"
+    default: ""  # Set to your SQL warehouse ID
   catalog_name:
     description: "Name of the catalog to use"
     default: "app_data"

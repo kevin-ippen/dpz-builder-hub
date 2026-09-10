@@ -14,6 +14,9 @@ import {
   export type FeatureMaturity = 'ga' | 'beta' | 'alpha';
   export type FeatureGroup = 'Discover' | 'Create' | 'Observe';
   
+  /** Module IDs that map to backend MODULE_* env vars. */
+  export type ModuleId = 'explore' | 'lab' | 'learn' | 'portfolio' | 'wishlist' | 'dashboard' | 'mcp' | 'compliance' | 'pipeline' | 'contracts' | 'semantic';
+
   export interface FeatureConfig {
     id: string;
     name: string;
@@ -25,6 +28,8 @@ import {
     showInLanding?: boolean;
     /** When set, permission checks use this feature ID instead of `id`. */
     permissionId?: string;
+    /** Maps this feature to a backend MODULE_* toggle. When that module is disabled, the feature is hidden. */
+    moduleId?: ModuleId;
   }
   
   export const features: FeatureConfig[] = [
@@ -38,6 +43,7 @@ import {
       group: 'Discover',
       maturity: 'ga',
       showInLanding: true,
+      moduleId: 'explore',
     },
     {
       id: 'lab',
@@ -49,6 +55,7 @@ import {
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'assets',
+      moduleId: 'lab',
     },
     {
       id: 'learn',
@@ -60,6 +67,7 @@ import {
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'assets',
+      moduleId: 'learn',
     },
 
     // ─── My Stuff ─── Your portfolio and wishlist
@@ -73,6 +81,7 @@ import {
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'data-products',
+      moduleId: 'portfolio',
     },
     {
       id: 'my-requests',
@@ -84,6 +93,7 @@ import {
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'data-products',
+      moduleId: 'wishlist',
     },
 
     // ─── Observe ─── Portfolio health, metrics, admin
@@ -97,6 +107,7 @@ import {
       maturity: 'ga',
       showInLanding: true,
       permissionId: 'assets',
+      moduleId: 'dashboard',
     },
     {
       id: 'settings',
@@ -134,12 +145,20 @@ import {
   
   // Helper function to group features for navigation
   export const getNavigationGroups = (
-      allowedMaturities: FeatureMaturity[] = ['ga']
+      allowedMaturities: FeatureMaturity[] = ['ga'],
+      enabledModules?: Record<string, boolean>,
     ): { name: FeatureGroup; items: FeatureConfig[] }[] => {
       const grouped: { [key in FeatureGroup]?: FeatureConfig[] } = {};
   
       features
         .filter((feature) => allowedMaturities.includes(feature.maturity))
+        .filter((feature) => {
+          // If no module map yet (still loading), show everything
+          if (!enabledModules) return true;
+          // Features without a moduleId are always shown (e.g. Settings)
+          if (!feature.moduleId) return true;
+          return enabledModules[feature.moduleId] !== false;
+        })
         .forEach((feature) => {
           if (!grouped[feature.group]) {
             grouped[feature.group] = [];
@@ -159,10 +178,13 @@ import {
   
   // Helper function to get features for landing pages (Home, About)
   export const getLandingPageFeatures = (
-      allowedMaturities: FeatureMaturity[] = ['ga']
+      allowedMaturities: FeatureMaturity[] = ['ga'],
+      enabledModules?: Record<string, boolean>,
   ): FeatureConfig[] => {
       return features.filter(
           (feature) =>
-          feature.showInLanding && allowedMaturities.includes(feature.maturity)
+          feature.showInLanding
+          && allowedMaturities.includes(feature.maturity)
+          && (!enabledModules || !feature.moduleId || enabledModules[feature.moduleId] !== false)
       );
   };

@@ -8,7 +8,7 @@
 # MAGIC
 # MAGIC **Sources**: Databricks Blog, Azure Release Notes, Databricks YouTube
 # MAGIC
-# MAGIC **Target**: `serverless_stable_h7wanf_catalog.dpz_feeds_bronze.content_raw`
+# MAGIC **Target**: Configured via `DPZ_FEEDS_CATALOG` env var (see `pipeline/config.py`)
 
 # COMMAND ----------
 # MAGIC %pip install feedparser trafilatura -q
@@ -19,7 +19,12 @@ import logging
 import sys
 
 # Add pipeline directory to path
-sys.path.insert(0, "/Workspace/Users/kevin.ippen@databricks.com/dpz-builder-hub/src/pipeline")
+# Auto-detect pipeline directory relative to this notebook
+import os as _os
+_pipeline_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".")
+if not _os.path.exists(_os.path.join(_pipeline_dir, "config.py")):
+    _pipeline_dir = _os.path.dirname(_os.path.abspath(__file__))
+sys.path.insert(0, _pipeline_dir)
 
 from feeds_crawler import run_crawl
 from config import BRONZE_FQN

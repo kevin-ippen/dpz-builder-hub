@@ -476,7 +476,7 @@ async def startup_event():
                      ['model-training', 'batch-inference', 'feature-store']),
                     ('d0000001-000a-4000-8000-00000000000a', 'Catalog Ownership Audit',
                      'Identify orphaned tables and assign owners across all Unity Catalog schemas.',
-                     'shipped', 9, 'kevin.ippen@databricks.com', 90,
+                     'shipped', 9, 'admin@example.com', 90,
                      ['governed-catalog', 'observability']),
                     ('d0000001-000b-4000-8000-00000000000b', 'Customer Lifetime Value Model',
                      'Score every customer on predicted 12-month revenue.',

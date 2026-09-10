@@ -9,7 +9,7 @@ Override via environment variables or edit defaults below.
 import os
 
 # ── UC catalog ────────────────────────────────────────────────────────
-CATALOG = os.getenv("DPZ_FEEDS_CATALOG", "serverless_stable_h7wanf_catalog")
+CATALOG = os.getenv("DPZ_FEEDS_CATALOG", "")
 
 # ── Bronze layer (crawler output) ────────────────────────────────────
 # Set BRONZE_TABLE to point at an existing bronze table, or leave default
@@ -24,7 +24,7 @@ GOLD_TABLE  = os.getenv("DPZ_FEEDS_GOLD_TABLE",  "content_search_source")
 GOLD_FQN    = f"{CATALOG}.{GOLD_SCHEMA}.{GOLD_TABLE}"
 
 # ── SQL warehouse (for sync-feeds endpoint) ──────────────────────────
-WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID", "4047b28d66a51bdc")
+WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID", "")
 
 # ── RSS/sitemap feed sources (used by crawler) ───────────────────────
 FEED_SOURCES = [

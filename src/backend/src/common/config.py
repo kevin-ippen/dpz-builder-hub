@@ -180,6 +180,21 @@ class Settings(BaseSettings):
     UI_APP_SHORT_NAME: Optional[str] = Field(None, env='UI_APP_SHORT_NAME')  # Optional short/abbreviated name for compact UI surfaces
     UI_FAVICON_URL: Optional[str] = Field(None, env='UI_FAVICON_URL')  # URL to custom favicon image (http/https)
 
+    # ── Module toggles ────────────────────────────────────────────────
+    # Each module can be disabled via env var. All default to True (enabled).
+    # Set any to "false" in app.yaml or .env to hide the feature entirely.
+    MODULE_EXPLORE: bool = Field(True, env='MODULE_EXPLORE')         # /assets — browse assets
+    MODULE_LAB: bool = Field(True, env='MODULE_LAB')                 # /lab — experimental builds
+    MODULE_LEARN: bool = Field(True, env='MODULE_LEARN')             # /learn — blogs, releases, how-tos
+    MODULE_PORTFOLIO: bool = Field(True, env='MODULE_PORTFOLIO')     # /my-portfolio — user's assets
+    MODULE_WISHLIST: bool = Field(True, env='MODULE_WISHLIST')       # /wishlist — demand board
+    MODULE_DASHBOARD: bool = Field(True, env='MODULE_DASHBOARD')     # /dashboard — portfolio health
+    MODULE_MCP: bool = Field(True, env='MODULE_MCP')                 # MCP server endpoints
+    MODULE_COMPLIANCE: bool = Field(True, env='MODULE_COMPLIANCE')   # Compliance DSL engine
+    MODULE_PIPELINE: bool = Field(False, env='MODULE_PIPELINE')      # Feeds pipeline (blog/release scraper) — opt-in
+    MODULE_CONTRACTS: bool = Field(True, env='MODULE_CONTRACTS')     # Data contracts
+    MODULE_SEMANTIC: bool = Field(True, env='MODULE_SEMANTIC')       # Semantic models + ontology
+
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(
         env_file=str(DOTENV_FILE), 
