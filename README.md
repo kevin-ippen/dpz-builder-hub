@@ -1,6 +1,6 @@
 # Builder Hub
 
-**The missing layer between Unity Catalog and your business.**
+<img width="1536" height="1024" alt="builder-hub" src="https://github.com/user-attachments/assets/0e87926a-3172-4cb7-bd73-21f7e70946c7" />
 
 You have hundreds of tables, models, dashboards, and pipelines in Unity Catalog. What you don't have is a way to answer the questions that actually matter:
 
@@ -12,6 +12,7 @@ You have hundreds of tables, models, dashboards, and pipelines in Unity Catalog.
 Builder Hub doesn't replace Unity Catalog. It sits on top of it and adds the **human layer**: who owns what, how mature is it, what does the business actually need next, and who deserves credit for shipping it.
 
 ---
+
 
 ## The Core Idea
 
@@ -42,6 +43,8 @@ Builder Hub is designed to fix all of these problems without adding bureaucracy.
 ---
 
 ## How It Works
+
+<img width="1774" height="887" alt="process" src="https://github.com/user-attachments/assets/bb230b24-fa24-4a89-b020-3b959668dad3" />
 
 ### 1. Register what exists (Explore)
 
