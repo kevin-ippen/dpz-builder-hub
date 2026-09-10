@@ -1,5 +1,5 @@
 bundle:
-  name: ontos
+  name: builder-hub
 
 variables:
   sql_warehouse_id:
@@ -10,13 +10,13 @@ variables:
     default: "app_data"
   schema_name:
     description: "Name of the schema to use"
-    default: "app_ontos"
+    default: "app_data"
   volume_name:
     description: "Name of the volume to use"
     default: "app_files"
   app_config:
     type: complex
-    description: "Configuration for Ontos"
+    description: "Configuration for Builder Hub"
     default:
       command:
         - "uvicorn"
@@ -37,9 +37,9 @@ variables:
 
 resources:
   apps:
-    ontos:
-      name: "ontos"
-      description: "Ontos"
+    builder-hub:
+      name: "builder-hub"
+      description: "Builder Hub — data product management for Databricks"
       source_code_path: "."
       config: ${var.app_config}
       resources:
@@ -56,10 +56,10 @@ targets:
   dev:
     variables:
       catalog_name: "app_data_dev"
-      schema_name: "app_ontos_dev"
+      schema_name: "app_data_dev"
       volume_name: "app_files_dev"
   prod:
     variables:
       catalog_name: "app_data_prod"
-      schema_name: "app_ontos_prod"
+      schema_name: "app_data_prod"
       volume_name: "app_files_prod"

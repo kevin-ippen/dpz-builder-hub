@@ -38,7 +38,7 @@
       },
       "schema": {
         "label": "Schema",
-        "placeholder": "app_ontos"
+        "placeholder": "app_data"
       },
       "volume": {
         "label": "Volume",
@@ -134,7 +134,7 @@
     },
     "workspaceDeploymentPath": {
       "label": "Percorso di distribuzione del workspace",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "placeholder": "/Workspace/Users/user@domain.com/workflows",
       "help": "Percorso nel workspace Databricks dove vengono distribuiti i file di workflow per i job in background.",
       "requiredHint": "Imposta il percorso di distribuzione sopra per abilitare i workflow."
     },

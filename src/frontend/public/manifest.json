@@ -1,19 +1,19 @@
 {
-  "short_name": "UC Swiss Army Knife",
-  "name": "Ontos",
+  "short_name": "Builder Hub",
+  "name": "Builder Hub",
   "icons": [
     {
-      "src": "ontos-logo.svg",
+      "src": "wrench-icon.svg",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/svg+xml"
     },
     {
-      "src": "ontos-logo.svg",
+      "src": "wrench-icon.svg",
       "type": "image/svg+xml",
       "sizes": "192x192"
     },
     {
-      "src": "ontos-logo.svg",
+      "src": "wrench-icon.svg",
       "type": "image/svg+xml",
       "sizes": "512x512"
     }

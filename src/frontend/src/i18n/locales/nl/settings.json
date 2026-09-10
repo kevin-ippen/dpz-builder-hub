@@ -38,7 +38,7 @@
       },
       "schema": {
         "label": "Schema",
-        "placeholder": "app_ontos"
+        "placeholder": "app_data"
       },
       "volume": {
         "label": "Volume",
@@ -134,7 +134,7 @@
     },
     "workspaceDeploymentPath": {
       "label": "Workspace Deployment Pad",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "placeholder": "/Workspace/Users/user@domain.com/workflows",
       "help": "Pad in Databricks workspace waar workflow bestanden worden gedeployed voor achtergrond jobs.",
       "requiredHint": "Stel het deployment pad hierboven in om workflows in te schakelen."
     },

@@ -693,5 +693,5 @@ Only add additional permissions (e.g., `issues: write`) if the workflow genuinel
 - Start a discussion for questions or ideas
 - Check existing issues before creating new ones
 
-Thank you for contributing to Ontos! 🎉
+Thank you for contributing to Builder Hub! 🎉
 

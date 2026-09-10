@@ -318,7 +318,7 @@ export default function CopilotPanel() {
           onMouseDown={startResize}
           role="separator"
           aria-orientation="vertical"
-          aria-label={t('search:copilot.resizeHandle', { defaultValue: 'Resize Ask Ontos panel' })}
+          aria-label={t('search:copilot.resizeHandle', { defaultValue: 'Resize copilot panel' })}
           aria-valuemin={COPILOT_MIN_WIDTH}
           aria-valuemax={COPILOT_MAX_WIDTH}
           aria-valuenow={panelWidth}
@@ -385,7 +385,7 @@ export default function CopilotPanel() {
 
         {/* Context badge — dropdown lets the user flip between page-
             scoped ("Asking about <entity>" or "<page name>") and a
-            scope-free "Ontos (general)" mode. */}
+            scope-free "General" mode. */}
         <div className="px-4 py-2 border-b bg-muted/30 shrink-0">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>{t('search:copilot.askingAbout')}</span>

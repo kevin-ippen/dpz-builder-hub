@@ -1,6 +1,6 @@
-# Configuring Ontos
+# Configuring Builder Hub
 
-This document covers all configuration options for running Ontos, including environment variables, database setup, and deployment configuration.
+This document covers all configuration options for running Builder Hub, including environment variables, database setup, and deployment configuration.
 
 ## Table of Contents
 
@@ -44,8 +44,8 @@ Create a `.env` file in the project root (see `.env.example` for a complete temp
 | `POSTGRES_PORT` | PostgreSQL server port | `5432` | Conditional |
 | `POSTGRES_USER` | PostgreSQL username | `app_user` | Conditional |
 | `POSTGRES_PASSWORD` | PostgreSQL password (required for `ENV=LOCAL` only) | `your_secure_password` | Conditional |
-| `POSTGRES_DB` | PostgreSQL database name | `app_ontos_db` | Conditional |
-| `POSTGRES_DB_SCHEMA` | Database schema for app tables (defaults to `public`) | `app_ontos` | No |
+| `POSTGRES_DB` | PostgreSQL database name | `app_data_db` | Conditional |
+| `POSTGRES_DB_SCHEMA` | Database schema for app tables (defaults to `public`) | `app_data` | No |
 
 ### Connection Pool Settings
 
@@ -102,7 +102,7 @@ DB_POOL_TIMEOUT=10
 
 ## Database Configuration
 
-Ontos stores its metadata (settings, roles, reviews, etc.) in PostgreSQL.
+Builder Hub stores its metadata (settings, roles, reviews, etc.) in PostgreSQL.
 
 ### Authentication Modes
 
@@ -140,13 +140,13 @@ psql -U $(whoami) -d postgres
 Run these SQL commands:
 ```sql
 -- Create application user
-CREATE ROLE ontos_app_user WITH LOGIN PASSWORD '<your_password>';
-GRANT ontos_app_user TO "<your_postgres_user>";
+CREATE ROLE app_user WITH LOGIN PASSWORD '<your_password>';
+GRANT app_user TO "<your_postgres_user>";
 
 -- Create database
-CREATE DATABASE app_ontos;
-GRANT ALL PRIVILEGES ON DATABASE app_ontos TO ontos_app_user;
-GRANT USAGE ON SCHEMA public TO ontos_app_user;
+CREATE DATABASE app_data;
+GRANT ALL PRIVILEGES ON DATABASE app_data TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
 GRANT CREATE ON SCHEMA public TO ontos_app_user;
 \q
 ```

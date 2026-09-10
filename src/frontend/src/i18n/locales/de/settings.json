@@ -38,7 +38,7 @@
       },
       "schema": {
         "label": "Schema",
-        "placeholder": "app_ontos"
+        "placeholder": "app_data"
       },
       "volume": {
         "label": "Volume",
@@ -134,7 +134,7 @@
     },
     "workspaceDeploymentPath": {
       "label": "Workspace-Bereitstellungspfad",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "placeholder": "/Workspace/Users/user@domain.com/workflows",
       "help": "Pfad im Databricks-Workspace, in dem Workflow-Dateien für Hintergrund-Jobs bereitgestellt werden.",
       "requiredHint": "Legen Sie oben den Bereitstellungspfad fest, um Workflows zu aktivieren."
     },

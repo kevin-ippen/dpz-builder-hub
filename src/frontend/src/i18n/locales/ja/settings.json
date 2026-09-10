@@ -38,7 +38,7 @@
       },
       "schema": {
         "label": "スキーマ",
-        "placeholder": "app_ontos"
+        "placeholder": "app_data"
       },
       "volume": {
         "label": "ボリューム",
@@ -134,7 +134,7 @@
     },
     "workspaceDeploymentPath": {
       "label": "ワークスペースデプロイパス",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "placeholder": "/Workspace/Users/user@domain.com/workflows",
       "help": "バックグラウンドジョブ用のワークフローファイルがデプロイされるDatabricksワークスペース内のパス。",
       "requiredHint": "ワークフローを有効化するには、上記のデプロイパスを設定してください。"
     },
