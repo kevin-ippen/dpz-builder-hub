@@ -52,5 +52,7 @@ src/e2e/config.local.yaml
 licenses.json
 licenses.csv
 
-.cursor/plans/
+.cursor/
+.cursorrules
+CLAUDE.md
 docs/research/

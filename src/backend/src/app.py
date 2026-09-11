@@ -25,6 +25,7 @@ from fastapi import HTTPException, status
 from src.common.middleware import ErrorHandlingMiddleware, LoggingMiddleware, MaintenanceMiddleware
 from src.routes import (
     access_grants_routes,
+    bootstrap_routes,
     catalog_commander_routes,
     data_catalog_routes,
     compliance_routes,
@@ -830,6 +831,7 @@ directory_routes.register_routes(app)
 connection_routes.register_routes(app)
 schema_import_routes.register_routes(app)
 term_mapping_routes.register_routes(app)
+bootstrap_routes.register_routes(app)
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")

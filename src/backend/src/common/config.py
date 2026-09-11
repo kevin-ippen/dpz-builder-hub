@@ -51,8 +51,8 @@ class Settings(BaseSettings):
     # Databricks connection settings
     DATABRICKS_HOST: str
     DATABRICKS_WAREHOUSE_ID: str
-    DATABRICKS_CATALOG: str = Field("app_data", env='DATABRICKS_CATALOG')  # Default Unity Catalog
-    DATABRICKS_SCHEMA: str = Field("app_data", env='DATABRICKS_SCHEMA')  # Default schema
+    DATABRICKS_CATALOG: str = Field("app_ontos", env='DATABRICKS_CATALOG')  # Default Unity Catalog
+    DATABRICKS_SCHEMA: str = Field("app_ontos", env='DATABRICKS_SCHEMA')  # Default schema
     DATABRICKS_VOLUME: Optional[str] = Field(None, env='DATABRICKS_VOLUME')  # Full volume path (injected by Databricks Apps)
     DATABRICKS_TOKEN: Optional[str] = None  # Optional since handled by SDK
     DATABRICKS_CONFIG_PROFILE: Optional[str] = Field(

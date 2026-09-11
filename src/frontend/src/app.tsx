@@ -38,6 +38,7 @@ import WishDetailView from './views/wish-detail';
 import DashboardView from './views/dashboard';
 import LearnView from './views/learn';
 // Settings / Admin (DPZ-scoped)
+import BootstrapWizardView from './views/bootstrap-wizard';
 import SettingsLayout from './components/settings/settings-layout';
 import SettingsGeneralView from './views/settings-general';
 import SettingsUiView from './views/settings-ui';
@@ -133,6 +134,7 @@ export default function App() {
                 <Route path="general" element={<SettingsGeneralView />} />
                 <Route path="ui" element={<SettingsUiView />} />
                 <Route path="audit" element={<AuditTrailView />} />
+                <Route path="bootstrap" element={<BootstrapWizardView />} />
               </Route>
               {/* System / Utility */}
               <Route path="/search" element={<SearchView />} />

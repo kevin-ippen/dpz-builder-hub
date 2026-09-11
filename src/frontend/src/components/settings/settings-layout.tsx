@@ -13,6 +13,7 @@ import {
   UserCog,
   ScrollText,
   Blocks,
+  Rocket,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -56,6 +57,7 @@ const settingsNavGroups: SettingsNavGroup[] = [
       { path: '/settings/general', labelKey: 'settings:tabs.general', defaultLabel: 'General', icon: Settings, permissionId: 'settings-general' },
       { path: '/settings/ui', labelKey: 'settings:tabs.ui', defaultLabel: 'Appearance', icon: Palette, permissionId: 'settings-ui' },
       { path: '/settings/audit', labelKey: 'settings:tabs.audit', defaultLabel: 'Audit Trail', icon: ScrollText, permissionId: 'audit' },
+      { path: '/settings/bootstrap', labelKey: 'settings:tabs.bootstrap', defaultLabel: 'Bootstrap', icon: Rocket, permissionId: 'settings' },
     ],
   },
 ];
