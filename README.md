@@ -57,6 +57,8 @@ This means adoption is incremental. You don't need to register everything on day
 
 ### 2. Track maturity (5-Level Model)
 
+<img width="1685" height="984" alt="Screenshot 2026-09-11 at 3 15 40 PM" src="https://github.com/user-attachments/assets/8a0fff22-ecee-4c06-abb0-6e2f4b91b83e" />
+
 Every asset progresses through a maturity ladder with **automated, policy-driven gates**:
 
 | Level | Name | What It Means | Gate Examples |
@@ -115,8 +117,6 @@ Reaching **Trusted** (Level 5) requires passing all maturity gates and earning c
 The compliance engine evaluates assets against policies written in a declarative DSL. Policies can enforce anything from "every Gold asset must have an ODCS data contract" to "tables in the PII domain must have column-level masking."
 
 This is where Builder Hub connects back to Unity Catalog's governance primitives — tags, grants, row filters, column masks — and adds the organizational workflow layer that makes them actionable.
-
-<img width="1685" height="984" alt="Screenshot 2026-09-11 at 3 15 40 PM" src="https://github.com/user-attachments/assets/8a0fff22-ecee-4c06-abb0-6e2f4b91b83e" />
 
 ### 6. Align with strategy (Capabilities)
 
