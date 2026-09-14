@@ -44,11 +44,16 @@ Builder Hub is designed to fix all of these problems without adding bureaucracy.
 
 ## How It Works
 
+<img width="1938" height="1189" alt="Screenshot 2026-09-11 at 3 15 22 PM" src="https://github.com/user-attachments/assets/06d83a3e-69b0-4892-acba-f3082edac3a0" />
+
 ### 1. Register what exists (Explore)
 
 Assets in Builder Hub are **pointers to things that already exist** in your Databricks workspace — UC tables, ML models, dashboards, notebooks, pipelines. Registration is lightweight: you're adding context (owner, description, capabilities, domain) to something that already has a technical home.
 
 This means adoption is incremental. You don't need to register everything on day one. Start with the 20 assets your team uses most. The catalog grows organically as people contribute.
+
+<img width="736" height="1104" alt="Screenshot 2026-09-11 at 3 16 16 PM" src="https://github.com/user-attachments/assets/2e2038f5-b2b9-4a95-93cd-adbd62f9bc14" />
+
 
 ### 2. Track maturity (5-Level Model)
 
@@ -65,8 +70,11 @@ Every asset progresses through a maturity ladder with **automated, policy-driven
 Gates are evaluated automatically via a compliance DSL. An asset at Level 3 means it's described, owned, and connected to business terminology — not because someone checked a box, but because the system verified it.
 
 This replaces the common anti-pattern where "production" means "someone deployed it on a Friday and it hasn't broken yet." In Builder Hub, production means something earned and verifiable.
+![Uploading Screenshot 2026-09-11 at 3.16.16 PM.png…]()
 
 ### 3. Surface demand (Wishlist)
+
+<img width="1201" height="963" alt="Screenshot 2026-09-11 at 3 16 30 PM" src="https://github.com/user-attachments/assets/43582e9a-4517-402b-95ba-ed02b6e1cf5e" />
 
 The Wishlist is a **demand board** where anyone in the organization can submit what they need built. It's not a suggestion box — it's a prioritization engine.
 
@@ -108,7 +116,11 @@ The compliance engine evaluates assets against policies written in a declarative
 
 This is where Builder Hub connects back to Unity Catalog's governance primitives — tags, grants, row filters, column masks — and adds the organizational workflow layer that makes them actionable.
 
+<img width="1685" height="984" alt="Screenshot 2026-09-11 at 3 15 40 PM" src="https://github.com/user-attachments/assets/8a0fff22-ecee-4c06-abb0-6e2f4b91b83e" />
+
 ### 6. Align with strategy (Capabilities)
+
+<img width="1205" height="1046" alt="Screenshot 2026-09-11 at 3 16 41 PM" src="https://github.com/user-attachments/assets/738ee0c1-3789-49fb-8852-5177baf20a27" />
 
 Capabilities are the bridge between business priorities and technical assets. They represent *what the organization can do* rather than *what the organization has built*.
 
